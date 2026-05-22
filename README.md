@@ -16,6 +16,7 @@ A local search engine for Outlook PST files. Index once, then search by subject,
 - **Sort by date or relevance** — dropdown in the result-list header switches between Newest first (default), Oldest first, and Relevance (BM25 ranking for search queries).
 - **Filters**: from, to, folder, date range, has-attachments.
 - **Lazy attachments**: the index stores only filenames and sizes. Clicking an attachment re-opens the PST and extracts that one file on demand. No multi-GB attachment dump on disk.
+- **Export to `.eml`**: every message has a Download button that produces a standard RFC 5322 `.eml` file with headers, body (plain + HTML), and all attachments. Opens in Outlook, Thunderbird, Apple Mail, or any webmail upload.
 - **Multiple PSTs** in one index. Re-indexing a PST replaces its rows in place.
 - **Local-only**: everything runs on `127.0.0.1`. No data leaves your machine.
 
