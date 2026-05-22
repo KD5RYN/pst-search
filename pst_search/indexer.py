@@ -19,6 +19,7 @@ def index_pst(
     *,
     progress: ProgressFn | None = None,
     commit_every: int = 5000,
+    options: dict | None = None,
 ) -> tuple[int, int]:
     pst_path = str(Path(pst_path).resolve())
     conn = db.connect(db_path)
@@ -30,7 +31,7 @@ def index_pst(
     indexed = 0
     skipped = 0
     try:
-        for msg in pstmod.iter_messages(pst_path):
+        for msg in pstmod.iter_messages(pst_path, options=options):
             try:
                 db.insert_message(conn, pst_id, msg)
                 indexed += 1

@@ -27,6 +27,7 @@ class IndexJob:
     finished_at: float | None = None
     pst_id: int | None = None
     error: str | None = None
+    options: dict = field(default_factory=dict)
     # threading.Event holds a _thread.lock which dataclasses.asdict can't
     # deepcopy — keep it out of the dataclass field list. Attached lazily.
     cancel_event: threading.Event = field(default=None, repr=False, compare=False)  # type: ignore[assignment]
@@ -45,6 +46,7 @@ class IndexJob:
             "finished_at": self.finished_at,
             "pst_id": self.pst_id,
             "error": self.error,
+            "options": self.options,
             "elapsed": round((self.finished_at or time.time()) - self.started_at, 1),
         }
 
@@ -62,8 +64,12 @@ class JobRegistry:
         with self._lock:
             return self._jobs.get(job_id)
 
-    def start(self, pst_path: str, db_path: Path) -> IndexJob:
-        job = IndexJob(id=str(uuid.uuid4()), path=str(Path(pst_path).resolve()))
+    def start(self, pst_path: str, db_path: Path, *, options: dict | None = None) -> IndexJob:
+        job = IndexJob(
+            id=str(uuid.uuid4()),
+            path=str(Path(pst_path).resolve()),
+            options=options or {},
+        )
         with self._lock:
             self._jobs[job.id] = job
         threading.Thread(target=self._run, args=(job, db_path), daemon=True).start()
@@ -76,7 +82,10 @@ class JobRegistry:
             job.indexed = done
 
         try:
-            pst_id, total = indexer.index_pst(job.path, db_path, progress=on_progress)
+            pst_id, total = indexer.index_pst(
+                job.path, db_path,
+                progress=on_progress, options=job.options,
+            )
             job.pst_id = pst_id
             job.indexed = total
             job.status = "done"

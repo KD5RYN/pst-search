@@ -63,7 +63,14 @@ cd pst_search\node; npm install; cd ..\..
 pstsearch serve
 ```
 
-A browser tab opens at <http://127.0.0.1:8765>. Click **Manage PSTs → Add another PST**, pick your `.pst` file, and indexing starts. When it's done, search.
+A browser tab opens at <http://127.0.0.1:8765>.
+
+1. Click **📁 Manage PSTs → + Add another PST**
+2. Pick your `.pst` file in the native dialog
+3. **Adjust indexing options** (or accept defaults) and click **Start indexing**
+4. Search as soon as the first batch lands; the rest streams in behind you
+
+When it's done, search.
 
 The search index lives in your per-user data directory:
 
@@ -73,12 +80,46 @@ The search index lives in your per-user data directory:
 
 Delete that file to wipe the index and start over.
 
+## Indexing options
+
+The "Add a PST" dialog and the `pstsearch index` CLI command both expose the same three knobs. Defaults work for almost every mailbox; tweak them only when the defaults don't fit your data.
+
+| Option | GUI label | CLI flag | Default | When to change |
+| --- | --- | --- | --- | --- |
+| Include message bodies | _Index message bodies_ (checkbox) | `--no-body` | on | Off for **huge archives** when you only need to search by subject/sender — indexing becomes dramatically faster. |
+| Max body length kept | _Max body length per message_ | `--body-cap KB` | 32 KB | Raise (up to 1024 KB) if your real-content emails routinely run longer; lower to shrink the index. |
+| Skip body for very large messages | _Skip bodies larger than_ | `--max-html-fetch MB` | 4 MB | Lower if you want to ignore giant newsletter-style mail; raise toward 100 MB if you specifically want body text from huge messages too. |
+
+Open the **Advanced options** disclosure in the Add-PST dialog to see and adjust the last two.
+
+## App settings (⚙️ button)
+
+Click the gear icon in the header to see what the server is currently doing:
+
+- **Listening at** — the URL the server is bound to
+- **Network access** — confirms whether you're local-only or exposed
+- **Index database** — where the SQLite file lives, with an **Open data folder** button
+
+These are read-only because changing them requires restarting the server. To change them, pass flags to `pstsearch serve` (see below).
+
 ## Commands
 
 ```
-pstsearch serve [--host --port --db]    # launch the web UI (the normal entry point)
-pstsearch index FILE.pst [--db PATH]    # index a PST from the command line
-pstsearch list                          # show indexed PSTs
+pstsearch serve  [--host HOST] [--port PORT] [--db PATH] [--no-browser]
+    Launch the web UI. Defaults: --host 127.0.0.1 --port 8765.
+    Pass --host 0.0.0.0 to expose to your LAN (DO NOT do this on an
+    untrusted network — anyone reaching the port can search your mail).
+
+pstsearch index FILE.pst
+                 [--no-body]
+                 [--body-cap KB]
+                 [--max-html-fetch MB]
+                 [--db PATH]
+    Index a PST from the command line. Re-running on the same file
+    replaces its rows. Options mirror the GUI Add-PST dialog.
+
+pstsearch list
+    Show indexed PSTs (id, message count, path, indexed-at).
 ```
 
 ## Architecture

@@ -121,7 +121,25 @@ def _from_record(rec: dict) -> Message:
     )
 
 
-def iter_messages(pst_path: str | Path) -> Iterator[Message]:
+def _env_for_options(options: dict | None) -> dict:
+    """Translate the indexer's options dict into env vars extract.mjs reads.
+
+    Only sets vars that the caller explicitly chose — anything left as None
+    falls through to the defaults baked into extract.mjs.
+    """
+    env = os.environ.copy()
+    if not options:
+        return env
+    if options.get("include_body") is not None:
+        env["PST_SEARCH_BODY"] = "1" if options["include_body"] else "0"
+    if options.get("body_cap_bytes") is not None:
+        env["PST_SEARCH_BODY_CAP"] = str(int(options["body_cap_bytes"]))
+    if options.get("max_html_fetch_bytes") is not None:
+        env["PST_SEARCH_MAX_HTML_FETCH"] = str(int(options["max_html_fetch_bytes"]))
+    return env
+
+
+def iter_messages(pst_path: str | Path, options: dict | None = None) -> Iterator[Message]:
     """Stream messages from a PST via the Node extractor.
 
     Yields one Message per record. Raises RuntimeError if the subprocess fails
@@ -140,6 +158,7 @@ def iter_messages(pst_path: str | Path) -> Iterator[Message]:
         text=True,
         encoding="utf-8",
         errors="replace",
+        env=_env_for_options(options),
     )
 
     # Drain stderr on a background thread so it doesn't deadlock the pipe

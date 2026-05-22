@@ -219,6 +219,40 @@
     padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
   }
   .welcome .big-btn:hover { filter: brightness(1.1); }
+
+  /* ---------- Options panel (Add-PST + Settings) ---------- */
+  .field-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px;
+    margin: 10px 0;
+  }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 11px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .field input[type=number], .field input[type=text] {
+    background: var(--bg-3); border: 1px solid var(--border); color: var(--fg);
+    padding: 6px 10px; border-radius: 4px; font-size: 13px;
+  }
+  .field input:focus { outline: none; border-color: var(--accent); }
+  .field .hint { font-size: 11px; color: var(--fg-dim); }
+  .advanced-toggle {
+    background: none; border: none; color: var(--accent); cursor: pointer;
+    font-size: 12px; padding: 4px 0; text-align: left;
+  }
+  .advanced-toggle:hover { text-decoration: underline; }
+  .check-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+  .check-row label { font-size: 13px; cursor: pointer; user-select: none; }
+  .info-row { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; font-size: 13px; padding: 8px 0; }
+  .info-row .k { color: var(--fg-dim); }
+  .info-row .v { word-break: break-all; }
+  .secondary-btn {
+    background: var(--bg-3); color: var(--fg); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  .secondary-btn:hover { border-color: var(--accent); }
+  .file-display {
+    padding: 8px 12px; background: var(--bg-3); border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; word-break: break-all;
+  }
 </style>
 </head>
 <body>
@@ -230,8 +264,9 @@
     <input id="q" class="search" type="search" placeholder="Search subject, body, from, recipients…  (empty = browse all)" autofocus autocomplete="off">
   </div>
   <span class="meta" id="indexMeta">loading…</span>
-  <span class="privacy-chip" title="Server is bound to 127.0.0.1 — only accessible from this machine. No data leaves your computer.">🔒 Local only</span>
+  <span id="privacyChip" class="privacy-chip" title="Server is bound to 127.0.0.1 — only accessible from this machine. No data leaves your computer.">🔒 Local only</span>
   <button id="manageBtn" class="header-btn">📁 Manage PSTs</button>
+  <button id="settingsBtn" class="header-btn" title="App settings">⚙️</button>
 </header>
 
 <div class="filter-bar">
@@ -265,6 +300,79 @@
   <p>Pick an Outlook PST file from your computer to begin. The file stays on your machine — indexing and searching happen locally, and nothing is uploaded anywhere.</p>
   <button id="welcomePick" class="big-btn">Choose a PST file</button>
   <div id="welcomeStatus" style="color: var(--fg-dim); font-size: 12px;"></div>
+</div>
+
+<!-- Add-PST options modal (shown after the file picker returns a path) -->
+<div id="addModal" class="modal-overlay" role="dialog">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Index a PST</h2>
+      <button class="close-x" id="addModalClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>File</label>
+        <div class="file-display" id="addModalPath">—</div>
+      </div>
+
+      <div class="check-row" style="margin-top: 16px;">
+        <input type="checkbox" id="optIncludeBody" checked>
+        <label for="optIncludeBody">Index message bodies <span class="hint">(uncheck for metadata-only — much faster)</span></label>
+      </div>
+
+      <button class="advanced-toggle" id="advToggle" type="button">▸ Advanced options</button>
+      <div id="advBlock" style="display:none">
+        <div class="field-grid">
+          <div class="field">
+            <label>Max body length per message</label>
+            <input type="number" id="optBodyCap" min="1" max="1024" value="32" step="1">
+            <div class="hint">KB. Default 32. Anything beyond is truncated. Marketing emails have all their useful content in the first few KB.</div>
+          </div>
+          <div class="field">
+            <label>Skip bodies larger than</label>
+            <input type="number" id="optMaxFetch" min="1" max="100" value="4" step="1">
+            <div class="hint">MB. Default 4. Rare giant messages (huge embedded images) get subject/sender indexed but no body text.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="secondary-btn" id="addModalCancel">Cancel</button>
+      <button class="header-btn primary" id="addModalStart">Start indexing</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings modal (informational, read-only) -->
+<div id="settingsModal" class="modal-overlay" role="dialog">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Settings</h2>
+      <button class="close-x" id="settingsClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <h3 style="font-size:11px; color:var(--fg-dim); text-transform:uppercase; letter-spacing:0.5px; margin: 0 0 8px;">Server</h3>
+      <div class="info-row">
+        <div class="k">Listening at</div><div class="v" id="setAddr">—</div>
+        <div class="k">Network access</div><div class="v" id="setAccess">—</div>
+      </div>
+      <div class="hint" style="margin-top: 4px; color: var(--fg-dim); font-size: 12px;">
+        Change the port or expose to your LAN by restarting:<br>
+        <code style="background: var(--bg-3); padding: 2px 6px; border-radius: 3px; font-size: 11px;">pstsearch serve --host 0.0.0.0 --port 9000</code>
+      </div>
+
+      <h3 style="font-size:11px; color:var(--fg-dim); text-transform:uppercase; letter-spacing:0.5px; margin: 18px 0 8px;">Index database</h3>
+      <div class="info-row">
+        <div class="k">Location</div><div class="v" id="setDb">—</div>
+      </div>
+      <div style="margin-top: 8px;">
+        <button class="secondary-btn" id="setOpenFolder">Open data folder</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="header-btn" id="settingsCloseBtn">Close</button>
+    </div>
+  </div>
 </div>
 
 <!-- Manage PSTs modal -->
@@ -340,6 +448,27 @@ const modalClose = document.getElementById('modalClose');
 const addPstBtn = document.getElementById('addPstBtn');
 const jobsListEl = document.getElementById('jobsList');
 const pstsListEl = document.getElementById('pstsList');
+// Add-PST options modal
+const addModal = document.getElementById('addModal');
+const addModalPath = document.getElementById('addModalPath');
+const addModalClose = document.getElementById('addModalClose');
+const addModalCancel = document.getElementById('addModalCancel');
+const addModalStart = document.getElementById('addModalStart');
+const optIncludeBody = document.getElementById('optIncludeBody');
+const optBodyCap = document.getElementById('optBodyCap');
+const optMaxFetch = document.getElementById('optMaxFetch');
+const advToggle = document.getElementById('advToggle');
+const advBlock = document.getElementById('advBlock');
+// Settings modal
+const settingsBtn = document.getElementById('settingsBtn');
+const settingsModal = document.getElementById('settingsModal');
+const settingsClose = document.getElementById('settingsClose');
+const settingsCloseBtn = document.getElementById('settingsCloseBtn');
+const setAddr = document.getElementById('setAddr');
+const setAccess = document.getElementById('setAccess');
+const setDb = document.getElementById('setDb');
+const setOpenFolder = document.getElementById('setOpenFolder');
+const privacyChip = document.getElementById('privacyChip');
 
 const PAGE = 50;
 let offset = 0;
@@ -407,11 +536,13 @@ async function pickPst() {
   return j.path;
 }
 
-async function startIndex(path) {
+async function startIndex(path, options) {
+  const body = { path };
+  if (options) body.options = options;
   const r = await fetch('/api/index', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ path }),
+    body: JSON.stringify(body),
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({ detail: 'index start failed' }));
@@ -533,8 +664,12 @@ async function renderPstsList() {
   });
 }
 
+// Pending-add state — set when the file picker returns, consumed when the
+// user confirms the options dialog. The context indicates where we surface
+// errors (welcome screen vs an alert from the Manage modal).
+let pendingAdd = null;
+
 async function addPstFlow(context) {
-  // context is 'welcome' or 'modal' so we can show error inline
   let path;
   try {
     path = await pickPst();
@@ -546,19 +681,120 @@ async function addPstFlow(context) {
     }
     return;
   }
-  if (!path) return;   // user cancelled
+  if (!path) return;   // user cancelled the picker
+  pendingAdd = { path, context };
+  openAddModal(path);
+}
+
+function openAddModal(path) {
+  addModalPath.textContent = path;
+  // Reset to defaults each time
+  optIncludeBody.checked = true;
+  optBodyCap.value = 32;
+  optMaxFetch.value = 4;
+  advBlock.style.display = 'none';
+  advToggle.textContent = '▸ Advanced options';
+  syncBodyDependentFields();
+  addModal.classList.add('open');
+}
+
+function closeAddModal() {
+  addModal.classList.remove('open');
+  pendingAdd = null;
+}
+
+function syncBodyDependentFields() {
+  // Body-related advanced fields are meaningless when bodies are off
+  const enabled = optIncludeBody.checked;
+  optBodyCap.disabled = !enabled;
+  optMaxFetch.disabled = !enabled;
+}
+optIncludeBody.addEventListener('change', syncBodyDependentFields);
+
+advToggle.addEventListener('click', () => {
+  const open = advBlock.style.display !== 'none';
+  advBlock.style.display = open ? 'none' : 'block';
+  advToggle.textContent = open ? '▸ Advanced options' : '▾ Advanced options';
+});
+
+addModalClose.addEventListener('click', closeAddModal);
+addModalCancel.addEventListener('click', closeAddModal);
+addModal.addEventListener('click', (e) => { if (e.target === addModal) closeAddModal(); });
+
+addModalStart.addEventListener('click', async () => {
+  if (!pendingAdd) return;
+  const path = pendingAdd.path;
+  const context = pendingAdd.context;
+  // Build options object — only include fields that diverge from defaults.
+  const opts = {};
+  if (!optIncludeBody.checked) {
+    opts.include_body = false;
+  } else {
+    const capKB = parseInt(optBodyCap.value, 10);
+    const fetchMB = parseInt(optMaxFetch.value, 10);
+    if (!isNaN(capKB) && capKB !== 32) opts.body_cap_bytes = capKB * 1024;
+    if (!isNaN(fetchMB) && fetchMB !== 4) opts.max_html_fetch_bytes = fetchMB * 1024 * 1024;
+  }
   try {
-    await startIndex(path);
+    await startIndex(path, Object.keys(opts).length ? opts : null);
     ensurePollLoop();
+    closeAddModal();
     if (context === 'modal') renderPstsList();
   } catch (e) {
     if (context === 'welcome') {
       welcomeStatus.innerHTML = `<span style="color:#ffb4b4">${escapeHtml(String(e.message || e))}</span>`;
+      closeAddModal();
     } else {
       alert(e.message || String(e));
     }
   }
+});
+
+/* ---------- Settings modal ---------- */
+async function openSettings() {
+  setAddr.textContent = 'loading…';
+  setAccess.textContent = '…';
+  setDb.textContent = '…';
+  settingsModal.classList.add('open');
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    setAddr.textContent = `http://${s.host}:${s.port}`;
+    setAccess.innerHTML = s.is_local_only
+      ? '<span style="color:#7ce38b">🔒 Local only — not reachable from other machines</span>'
+      : `<span style="color:#ffd33d">⚠ Bound to ${escapeHtml(s.host)} — reachable from your network</span>`;
+    setDb.textContent = s.db_path;
+    // Reflect the same status in the header chip
+    if (s.is_local_only) {
+      privacyChip.style.color = '#7ce38b';
+      privacyChip.style.borderColor = '#2d5a3a';
+      privacyChip.style.background = '#0f1f15';
+      privacyChip.textContent = '🔒 Local only';
+    } else {
+      privacyChip.style.color = '#ffd33d';
+      privacyChip.style.borderColor = '#5a4a1d';
+      privacyChip.style.background = '#1f1a0a';
+      privacyChip.textContent = `⚠ ${s.host}`;
+    }
+  } catch (e) {
+    setAddr.textContent = `(error: ${e.message || e})`;
+  }
 }
+settingsBtn.addEventListener('click', openSettings);
+settingsClose.addEventListener('click', () => settingsModal.classList.remove('open'));
+settingsCloseBtn.addEventListener('click', () => settingsModal.classList.remove('open'));
+settingsModal.addEventListener('click', (e) => { if (e.target === settingsModal) settingsModal.classList.remove('open'); });
+setOpenFolder.addEventListener('click', async () => {
+  try {
+    const r = await fetch('/api/open-data-folder', { method: 'POST' });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert(err.detail || 'Could not open folder');
+    }
+  } catch (e) {
+    alert(String(e.message || e));
+  }
+});
 
 /* ---------- Modal open/close ---------- */
 manageBtn.addEventListener('click', () => {
@@ -784,8 +1020,25 @@ q.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') { q.value = ''; offset = 0; search(); }
 });
 
+// Refresh the privacy chip from /api/settings so it correctly warns when the
+// user started the server with --host 0.0.0.0 etc.
+async function refreshPrivacyChipFromSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    const s = await r.json();
+    if (!s.is_local_only) {
+      privacyChip.style.color = '#ffd33d';
+      privacyChip.style.borderColor = '#5a4a1d';
+      privacyChip.style.background = '#1f1a0a';
+      privacyChip.textContent = `⚠ ${s.host}`;
+      privacyChip.title = `Server is bound to ${s.host} — reachable from your network. Anyone with the URL and port can search your indexed email.`;
+    }
+  } catch {}
+}
+
 loadIndexMeta();
 loadFolders();
+refreshPrivacyChipFromSettings();
 search();   // initial browse-all view
 </script>
 </body>

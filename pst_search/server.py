@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import os
+import sys
 import threading
 from pathlib import Path
 
@@ -137,8 +138,21 @@ def api_attachment(message_id: int, att_index: int) -> StreamingResponse:
 
 # ---------- PST library management ----------
 
+class IndexOptions(BaseModel):
+    """Per-scan settings the user can adjust when indexing a PST.
+
+    All fields are optional — `None` means "use the extract.mjs default".
+    Defaults match the values baked into extract.mjs and are documented in
+    the README under Performance Notes.
+    """
+    include_body: bool | None = None       # PST_SEARCH_BODY (1/0)
+    body_cap_bytes: int | None = None      # PST_SEARCH_BODY_CAP (default 32768)
+    max_html_fetch_bytes: int | None = None  # PST_SEARCH_MAX_HTML_FETCH (default 4194304)
+
+
 class IndexRequest(BaseModel):
     path: str
+    options: IndexOptions | None = None
 
 
 @app.post("/api/pick-pst")
@@ -184,7 +198,8 @@ def api_index(req: IndexRequest) -> dict:
         raise HTTPException(status_code=400, detail=f"file not found: {req.path}")
     if p.suffix.lower() != ".pst":
         raise HTTPException(status_code=400, detail="file must have .pst extension")
-    job = job_registry.start(str(p), _db_path())
+    opts = req.options.model_dump() if req.options else {}
+    job = job_registry.start(str(p), _db_path(), options=opts)
     return job.to_dict()
 
 
@@ -199,6 +214,48 @@ def api_job(job_id: str) -> dict:
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     return job.to_dict()
+
+
+@app.get("/api/settings")
+def api_settings() -> dict:
+    """Return the app-wide runtime settings — bind address, port, DB path.
+
+    These are set at server start and require restart to change. The UI uses
+    this to show informational text and an "Open data folder" button.
+    """
+    host = os.environ.get("PSTSEARCH_HOST", "127.0.0.1")
+    port = int(os.environ.get("PSTSEARCH_PORT", "8765"))
+    db_path = _db_path()
+    return {
+        "host": host,
+        "port": port,
+        "is_local_only": host in ("127.0.0.1", "localhost", "::1"),
+        "db_path": str(db_path),
+        "db_dir": str(db_path.parent),
+    }
+
+
+@app.post("/api/open-data-folder")
+def api_open_data_folder() -> dict:
+    """Open the index DB's parent folder in the OS file manager.
+
+    Local-app convenience — the server is always running on the user's own
+    machine, so spawning a file-manager process there does what they expect.
+    """
+    folder = _db_path().parent
+    folder.mkdir(parents=True, exist_ok=True)
+    try:
+        if sys.platform == "win32":
+            os.startfile(str(folder))   # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            import subprocess
+            subprocess.Popen(["open", str(folder)])
+        else:
+            import subprocess
+            subprocess.Popen(["xdg-open", str(folder)])
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"could not open folder: {e}")
+    return {"opened": str(folder)}
 
 
 @app.delete("/api/psts/{pst_id}")

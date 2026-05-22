@@ -49,12 +49,29 @@ def main() -> None:
 @main.command("index")
 @click.argument("pst_file", type=click.Path(exists=True, dir_okay=False, path_type=Path))
 @click.option("--db", "db_path", type=click.Path(path_type=Path), default=None,
-              help="SQLite DB path (default: %APPDATA%/pst-search/index.db)")
-def cmd_index(pst_file: Path, db_path: Path | None) -> None:
+              help="SQLite DB path (default: per-OS user data directory)")
+@click.option("--no-body", is_flag=True, default=False,
+              help="Skip message body extraction entirely. Subject/sender/folder are still indexed. "
+                   "Dramatically faster on huge archives.")
+@click.option("--body-cap", type=int, default=None, metavar="KB",
+              help="Maximum body text stored per message, in KB. Default: 32.")
+@click.option("--max-html-fetch", type=int, default=None, metavar="MB",
+              help="Skip body fetch for messages larger than this, in MB. Default: 4.")
+def cmd_index(pst_file: Path, db_path: Path | None,
+              no_body: bool, body_cap: int | None, max_html_fetch: int | None) -> None:
     """Index a PST file. Re-running on the same file replaces its rows."""
     db_path = db_path or default_db_path()
+    options: dict = {}
+    if no_body:
+        options["include_body"] = False
+    if body_cap is not None:
+        options["body_cap_bytes"] = body_cap * 1024
+    if max_html_fetch is not None:
+        options["max_html_fetch_bytes"] = max_html_fetch * 1024 * 1024
     click.echo(f"Indexing {pst_file}")
     click.echo(f"   into  {db_path}")
+    if options:
+        click.echo(f"   options: {options}")
     t0 = time.monotonic()
     last = [t0]
 
@@ -66,7 +83,7 @@ def cmd_index(pst_file: Path, db_path: Path | None) -> None:
             last[0] = now
 
     try:
-        pst_id, n = index_pst(pst_file, db_path, progress=progress)
+        pst_id, n = index_pst(pst_file, db_path, progress=progress, options=options)
     except Exception as e:
         click.secho(f"FAILED: {e}", fg="red", err=True)
         sys.exit(1)
@@ -94,6 +111,8 @@ def cmd_serve(host: str, port: int, db_path: Path | None, no_browser: bool) -> N
         click.secho(f"Creating empty index at {db_path}", fg="yellow")
         dbmod.connect(db_path).close()
     os.environ["PSTSEARCH_DB"] = str(db_path)
+    os.environ["PSTSEARCH_HOST"] = host
+    os.environ["PSTSEARCH_PORT"] = str(port)
     url = f"http://{host}:{port}/"
     click.echo(f"Serving {db_path}")
     click.echo(f"   at  {url}")
