@@ -101,8 +101,8 @@ PST file --[Node + pst-extractor]--NDJSON--> Python indexer --[SQLite + FTS5]-->
 ## Performance notes
 
 - Indexing throughput is ~35 messages/sec end-to-end on a typical desktop. An 8GB / 27K-message PST takes ~13 minutes.
-- The Node side caps body text at 16 KB per message (configurable via `PST_SEARCH_BODY_CAP`). Useful content fits in the first few KB; the rest is usually marketing HTML noise.
-- For messages larger than 100 KB, the HTML body fetch is skipped to keep indexing fast (`PST_SEARCH_MAX_HTML_FETCH`). Subject/sender/recipients/folder are still indexed.
+- The Node side caps stored body text at 32 KB per message (configurable via `PST_SEARCH_BODY_CAP`). 32 KB is roughly 5,000+ words — well past the length of normal correspondence.
+- For genuinely enormous messages (over 4 MB total), the HTML body fetch is skipped to keep indexing predictable (`PST_SEARCH_MAX_HTML_FETCH`). On a typical mailbox this affects far less than 1% of messages. Subject, sender, recipients, and folder are always indexed.
 - Recipients are parsed from `transportMessageHeaders` instead of `pst-extractor`'s `getRecipient()` API. The API call hits disk per recipient and dominates indexing time on big PSTs (measured 120 ms/message vs effectively free for header parsing).
 
 ## Building a standalone .exe (Windows only, optional)
@@ -120,7 +120,7 @@ Output: `dist/pst-search/pst-search.exe` — a one-folder distribution that incl
 ## Known limitations
 
 - **Search folders are skipped.** Some PSTs have internal "search root" folders (`SPAM Search Folder 2`, `ItemProcSearch`, etc.) that contain search caches rather than user mail; `pst-extractor` can't enumerate them and we explicitly skip them. No real mail is missed.
-- **Body text is capped at 16 KB per message.** Marketing emails with 100 KB of HTML have all their useful content in the first paragraph; we don't store the rest. Tunable via `PST_SEARCH_BODY_CAP`.
-- **Bodies are only available for messages smaller than 100 KB.** Larger messages get subject/sender/recipients/folder indexed only. The detail pane will show "(empty body)" for those.
+- **Body text is capped at 32 KB per message.** Most emails fit well under this; marketing emails with hundreds of KB of HTML get truncated, but the useful content (greeting, offer, call-to-action) is always in the first few KB. Tunable via `PST_SEARCH_BODY_CAP`.
+- **Bodies are skipped for messages larger than 4 MB.** This affects the rare giant message (e.g., one with embedded multi-MB inline images). Their subject/sender/recipients/folder are still indexed. The detail pane shows "(empty body)" for those. Tunable via `PST_SEARCH_MAX_HTML_FETCH`.
 - **No incremental indexing.** Re-running `index` on the same PST replaces all its rows. Fine for static archives; not designed for live mailboxes.
 
