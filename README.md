@@ -44,15 +44,18 @@ cd pst-search
 
 ### Install
 
-```bash
-# macOS / Linux:
-./bootstrap.sh
+Two commands — same on every OS:
 
-# Windows:
-pwsh ./bootstrap.ps1
+```bash
+pip install -e .
+(cd pst_search/node && npm install)
 ```
 
-Each bootstrap runs `pip install -e .` and `npm install` in the right places.
+On Windows PowerShell the second line is:
+
+```pwsh
+cd pst_search\node; npm install; cd ..\..
+```
 
 ### Run
 
@@ -106,14 +109,6 @@ PST file --[Node + pst-extractor]--NDJSON--> Python indexer --[SQLite + FTS5]-->
 - The Node side caps stored body text at 32 KB per message (configurable via `PST_SEARCH_BODY_CAP`). 32 KB is roughly 5,000+ words — well past the length of normal correspondence.
 - For genuinely enormous messages (over 4 MB total), the HTML body fetch is skipped to keep indexing predictable (`PST_SEARCH_MAX_HTML_FETCH`). On a typical mailbox this affects far less than 1% of messages. Subject, sender, recipients, and folder are always indexed.
 - Recipients are parsed from `transportMessageHeaders` instead of `pst-extractor`'s `getRecipient()` API. The API call hits disk per recipient and dominates indexing time on big PSTs (measured 120 ms/message vs effectively free for header parsing).
-
-## Building a standalone .exe (Windows only, optional)
-
-```pwsh
-pwsh ./build_exe.ps1
-```
-
-Output: `dist/pst-search/pst-search.exe` — a one-folder distribution that includes Python and the Node runtime. End users running the `.exe` need nothing else installed.
 
 ## License
 
