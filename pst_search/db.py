@@ -290,10 +290,12 @@ def _search_fts(conn, query, *, sender, recipient, folder, has_attachments, date
                 messages.folder_path, messages.subject, messages.sender_name,
                 messages.sender_email, messages.recipients, messages.delivery_time,
                 messages.attachment_count,
+                pst_files.path AS pst_path,
                 snippet(messages_fts, 1, '<mark>', '</mark>', ' … ', 12) AS snippet,
                 bm25(messages_fts) AS score
             FROM messages_fts
             JOIN messages ON messages.id = messages_fts.rowid
+            JOIN pst_files ON pst_files.pst_id = messages.pst_id
             WHERE {where_sql}
             ORDER BY score
             LIMIT ? OFFSET ?""",
@@ -312,13 +314,17 @@ def _browse(conn, *, sender, recipient, folder, has_attachments, date_from, date
 
     rows = conn.execute(
         f"""SELECT
-                id, pst_id, pff_identifier, folder_path, subject, sender_name,
-                sender_email, recipients, delivery_time, attachment_count,
-                COALESCE(substr(body, 1, 200), '') AS snippet,
+                messages.id, messages.pst_id, messages.pff_identifier,
+                messages.folder_path, messages.subject, messages.sender_name,
+                messages.sender_email, messages.recipients, messages.delivery_time,
+                messages.attachment_count,
+                pst_files.path AS pst_path,
+                COALESCE(substr(messages.body, 1, 200), '') AS snippet,
                 NULL AS score
             FROM messages
+            JOIN pst_files ON pst_files.pst_id = messages.pst_id
             {where_sql}
-            ORDER BY delivery_time DESC NULLS LAST, id DESC
+            ORDER BY messages.delivery_time DESC NULLS LAST, messages.id DESC
             LIMIT ? OFFSET ?""",
         params + [limit, offset],
     ).fetchall()
