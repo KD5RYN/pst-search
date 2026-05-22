@@ -188,6 +188,17 @@ PST file --[Node + pst-extractor]--NDJSON--> Python indexer --[SQLite + FTS5]-->
 
 `pst-search` is MIT-licensed (see `LICENSE`). Third-party dependencies and their licenses are listed in `THIRD_PARTY_LICENSES.md`.
 
+## A note on "password-protected" PST files
+
+Outlook lets you set a password on a PST. Despite the name, **this is not encryption of the message content** — it's a hash stored in the PST header that Outlook checks before opening the file. The actual messages and attachments are stored as cleartext (or with a weak public byte-permutation cipher that every PST library handles transparently).
+
+This means:
+
+- `pst-search` reads password-protected PSTs without asking for a password, because the underlying parser (pst-extractor) doesn't honor the header check. This matches the default behavior of essentially every PST tool — libpff, libpst, SysTools, Aspose, and the rest.
+- This is true of the format itself, not specific to our tool. Microsoft documented this in `[MS-PST]`. Anyone with the file can read its contents regardless of the password.
+- If you need the contents of a PST to remain confidential, **rely on file-system encryption** (BitLocker, FileVault, LUKS, an encrypted disk image) rather than Outlook's PST password.
+- Individual messages encrypted via S/MIME are a different mechanism (per-message PKCS#7, requires the recipient's private key) and `pst-search` cannot decrypt those. Their bodies will appear as encrypted blobs in the search index, which is correct behavior.
+
 ## Known limitations
 
 - **Search folders are skipped.** Some PSTs have internal "search root" folders (`SPAM Search Folder 2`, `ItemProcSearch`, etc.) that contain search caches rather than user mail; `pst-extractor` can't enumerate them and we explicitly skip them. No real mail is missed.
