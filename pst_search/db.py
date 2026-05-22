@@ -11,6 +11,7 @@ that live in the messages table, without duplicating storage.
 """
 from __future__ import annotations
 
+import re
 import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
@@ -154,11 +155,64 @@ def finalize_pst(conn: sqlite3.Connection, pst_id: int) -> None:
     conn.execute("ANALYZE")
 
 
+# Gmail/Outlook-style operator aliases. Users type the natural form on the
+# left; we rewrite it to FTS5's column-restricted syntax before MATCH'ing.
+# Multi-column aliases use parens + OR so they work inside larger expressions.
+_OPERATOR_ALIASES: dict[str, list[str]] = {
+    "from":    ["sender_email", "sender_name"],
+    "to":      ["recipients"],
+    "cc":      ["recipients"],
+    "bcc":     ["recipients"],
+    "subject": ["subject"],
+    "body":    ["body"],
+    "folder":  ["folder_path"],
+}
+# Match `op:value` where value is either an unquoted token (no spaces) or a
+# quoted phrase. We deliberately allow @ . - _ etc. inside unquoted tokens —
+# emails and folder paths are common targets.
+_OPERATOR_RE = re.compile(
+    r"\b(" + "|".join(_OPERATOR_ALIASES.keys()) + r"):(\"[^\"]+\"|\S+)",
+    flags=re.IGNORECASE,
+)
+
+
+def translate_query(query: str) -> str:
+    """Translate human-friendly operators into FTS5 column-restricted syntax.
+
+    Examples:
+        from:bob          -> (sender_email:bob OR sender_name:bob)
+        to:alice          -> recipients:alice
+        subject:"Q4 plan" -> subject:"Q4 plan"
+        meeting AND from:bob NOT folder:trash
+                          -> meeting AND (sender_email:bob OR sender_name:bob) NOT folder_path:trash
+
+    Anything that doesn't match an alias passes through untouched — so
+    native FTS5 syntax (AND/OR/NOT, quoted phrases, prefix*, parens) still
+    works exactly as it did before.
+    """
+    def repl(m: re.Match) -> str:
+        op = m.group(1).lower()
+        val = m.group(2)
+        # FTS5's parser only accepts alphanumeric+underscore in unquoted
+        # values. Email addresses, folder paths, anything with dots / @ / -
+        # has to be wrapped in double quotes. Already-quoted values pass
+        # through untouched.
+        if not (val.startswith('"') and val.endswith('"')):
+            if not re.fullmatch(r"\w+", val):
+                val = '"' + val.replace('"', '') + '"'
+        cols = _OPERATOR_ALIASES[op]
+        if len(cols) == 1:
+            return f"{cols[0]}:{val}"
+        return "(" + " OR ".join(f"{c}:{val}" for c in cols) + ")"
+    return _OPERATOR_RE.sub(repl, query)
+
+
 def search(
     conn: sqlite3.Connection,
     query: str | None,
     *,
     sender: str | None = None,
+    recipient: str | None = None,
     folder: str | None = None,
     has_attachments: bool | None = None,
     date_from: str | None = None,
@@ -175,18 +229,19 @@ def search(
     """
     query = (query or "").strip()
     if query:
-        return _search_fts(conn, query, sender=sender, folder=folder,
+        return _search_fts(conn, query, sender=sender, recipient=recipient, folder=folder,
                            has_attachments=has_attachments,
                            date_from=date_from, date_to=date_to,
                            limit=limit, offset=offset)
-    return _browse(conn, sender=sender, folder=folder,
+    return _browse(conn, sender=sender, recipient=recipient, folder=folder,
                    has_attachments=has_attachments,
                    date_from=date_from, date_to=date_to,
                    limit=limit, offset=offset)
 
 
 def _structured_filters(
-    sender: str | None, folder: str | None, has_attachments: bool | None,
+    sender: str | None, recipient: str | None,
+    folder: str | None, has_attachments: bool | None,
     date_from: str | None, date_to: str | None,
 ) -> tuple[list[str], list]:
     where: list[str] = []
@@ -194,6 +249,9 @@ def _structured_filters(
     if sender:
         where.append("(messages.sender_email LIKE ? OR messages.sender_name LIKE ?)")
         params += [f"%{sender}%", f"%{sender}%"]
+    if recipient:
+        where.append("messages.recipients LIKE ?")
+        params.append(f"%{recipient}%")
     if folder:
         where.append("messages.folder_path LIKE ?")
         params.append(f"%{folder}%")
@@ -210,10 +268,10 @@ def _structured_filters(
     return where, params
 
 
-def _search_fts(conn, query, *, sender, folder, has_attachments, date_from, date_to, limit, offset):
+def _search_fts(conn, query, *, sender, recipient, folder, has_attachments, date_from, date_to, limit, offset):
     where = ["messages_fts MATCH ?"]
-    params: list = [query]
-    extra_where, extra_params = _structured_filters(sender, folder, has_attachments, date_from, date_to)
+    params: list = [translate_query(query)]
+    extra_where, extra_params = _structured_filters(sender, recipient, folder, has_attachments, date_from, date_to)
     where.extend(extra_where)
     params.extend(extra_params)
     where_sql = " AND ".join(where)
@@ -244,8 +302,8 @@ def _search_fts(conn, query, *, sender, folder, has_attachments, date_from, date
     return rows, total
 
 
-def _browse(conn, *, sender, folder, has_attachments, date_from, date_to, limit, offset):
-    where, params = _structured_filters(sender, folder, has_attachments, date_from, date_to)
+def _browse(conn, *, sender, recipient, folder, has_attachments, date_from, date_to, limit, offset):
+    where, params = _structured_filters(sender, recipient, folder, has_attachments, date_from, date_to)
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
 
     total = conn.execute(

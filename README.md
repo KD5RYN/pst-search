@@ -11,8 +11,9 @@ A local search engine for Outlook PST files. Index once, then search by subject,
 ## Features
 
 - **Full-text search** across subject, body, sender, recipients, and folder path. FTS5-ranked, with `<mark>`-highlighted snippets.
+- **Gmail-style operators** in the search box: `from:bob`, `to:alice`, `subject:budget`, `body:meeting`, `folder:inbox`, combined with `AND`/`OR`/`NOT`, quoted phrases, prefix matching (`meet*`), and parentheses. Click the **?** next to the search box for the full cheatsheet.
 - **Browse mode** — leave the search box empty to list messages newest-first; click any folder in the tree to filter to it.
-- **Filters**: from, folder, date range, has-attachments.
+- **Filters**: from, to, folder, date range, has-attachments.
 - **Lazy attachments**: the index stores only filenames and sizes. Clicking an attachment re-opens the PST and extracts that one file on demand. No multi-GB attachment dump on disk.
 - **Multiple PSTs** in one index. Re-indexing a PST replaces its rows in place.
 - **Local-only**: everything runs on `127.0.0.1`. No data leaves your machine.
@@ -79,6 +80,37 @@ The search index lives in your per-user data directory:
 - Linux: `$XDG_DATA_HOME/pst-search/index.db` (default `~/.local/share/pst-search/index.db`)
 
 Delete that file to wipe the index and start over.
+
+## Search syntax
+
+The search box accepts the same operators most users already know from Gmail and Outlook, plus all of SQLite FTS5's native query language.
+
+**Operators:**
+
+| Type | Means |
+| --- | --- |
+| `from:bob` | sender name or email contains "bob" |
+| `to:alice` | any recipient (To/Cc/Bcc) contains "alice" |
+| `subject:budget` | match restricted to the subject |
+| `body:meeting` | match restricted to the body |
+| `folder:inbox` | folder path contains "inbox" |
+| `cc:` / `bcc:` | recipients (we don't distinguish To/Cc/Bcc) |
+
+**Combining:**
+
+| Form | Means |
+| --- | --- |
+| `a b` | both words present (implicit AND) |
+| `a AND b` | both — explicit |
+| `a OR b` | either |
+| `a NOT b` | a but not b |
+| `"q4 plan"` | exact phrase |
+| `meet*` | prefix — matches meeting, meetup, meets, … |
+| `(a OR b) AND c` | group with parens |
+
+**Example:** `from:bob AND subject:budget NOT folder:trash` — emails from Bob about budgets that aren't in any trash folder.
+
+Click the **?** icon at the right edge of the search box for a popup version of this cheatsheet.
 
 ## Indexing options
 

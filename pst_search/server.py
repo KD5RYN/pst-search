@@ -61,6 +61,7 @@ def api_folders() -> dict:
 def api_search(
     q: str = Query("", description="FTS5 query string; empty = browse mode"),
     sender: str | None = None,
+    recipient: str | None = None,
     folder: str | None = None,
     has_attachments: bool | None = None,
     date_from: str | None = None,
@@ -73,7 +74,8 @@ def api_search(
         try:
             rows, total = dbmod.search(
                 conn, q,
-                sender=sender, folder=folder, has_attachments=has_attachments,
+                sender=sender, recipient=recipient, folder=folder,
+                has_attachments=has_attachments,
                 date_from=date_from, date_to=date_to,
                 limit=limit, offset=offset,
             )

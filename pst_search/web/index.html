@@ -46,6 +46,32 @@
   }
   header.topbar .meta { color: var(--fg-dim); font-size: 12px; white-space: nowrap; }
 
+  /* Cheatsheet help button + popover */
+  .help-btn {
+    position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+    background: var(--bg-2); color: var(--fg-dim); border: 1px solid var(--border);
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 12px; font-weight: 600;
+  }
+  .help-btn:hover { color: var(--fg); border-color: var(--accent); }
+  .cheatsheet {
+    position: absolute; top: 100%; right: 0; margin-top: 8px;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 14px 16px; width: 380px; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    z-index: 20; display: none; font-size: 12px;
+  }
+  .cheatsheet.open { display: block; }
+  .cheatsheet h3 { font-size: 11px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.5px; margin: 0 0 8px; }
+  .cheatsheet table { width: 100%; border-collapse: collapse; }
+  .cheatsheet td { padding: 4px 0; vertical-align: top; }
+  .cheatsheet td:first-child {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--accent-2); white-space: nowrap; padding-right: 12px;
+  }
+  .cheatsheet td:last-child { color: var(--fg-dim); }
+  .cheatsheet hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+
   /* ---------- Filter bar below header ---------- */
   .filter-bar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
@@ -261,7 +287,33 @@
   <h1>📧 PST Search</h1>
   <div class="search-wrap">
     <span class="search-icon">🔍</span>
-    <input id="q" class="search" type="search" placeholder="Search subject, body, from, recipients…  (empty = browse all)" autofocus autocomplete="off">
+    <input id="q" class="search" type="search" placeholder="Search anything — try  from:bob meeting  or  subject:&quot;Q4 plan&quot;  or  to:alice AND has:attachment" autofocus autocomplete="off" style="padding-right: 38px;">
+    <button id="helpBtn" class="help-btn" type="button" title="Search syntax help" aria-label="Search syntax help">?</button>
+    <div id="cheatsheet" class="cheatsheet">
+      <h3>Search operators</h3>
+      <table>
+        <tr><td>from:bob</td><td>messages from anyone matching "bob"</td></tr>
+        <tr><td>to:alice</td><td>sent to anyone matching "alice" (To/Cc/Bcc)</td></tr>
+        <tr><td>subject:budget</td><td>match only in the subject</td></tr>
+        <tr><td>body:meeting</td><td>match only in the body</td></tr>
+        <tr><td>folder:inbox</td><td>messages whose folder path contains "inbox"</td></tr>
+      </table>
+      <hr>
+      <h3>Combine them</h3>
+      <table>
+        <tr><td>a AND b</td><td>both words present</td></tr>
+        <tr><td>a OR b</td><td>either word</td></tr>
+        <tr><td>a NOT b</td><td>has a, not b</td></tr>
+        <tr><td>"q4 plan"</td><td>exact phrase</td></tr>
+        <tr><td>meet*</td><td>prefix match (meeting, meetup…)</td></tr>
+        <tr><td>(a OR b) AND c</td><td>group with parentheses</td></tr>
+      </table>
+      <hr>
+      <h3>Example</h3>
+      <table>
+        <tr><td colspan="2" style="color: var(--fg); font-family: ui-monospace, SFMono-Regular, Menlo, monospace;">from:bob AND subject:budget NOT folder:trash</td></tr>
+      </table>
+    </div>
   </div>
   <span class="meta" id="indexMeta">loading…</span>
   <span id="privacyChip" class="privacy-chip" title="Server is bound to 127.0.0.1 — only accessible from this machine. No data leaves your computer.">🔒 Local only</span>
@@ -273,6 +325,10 @@
   <div class="group">
     <label>From</label>
     <input id="senderFilter" type="text" placeholder="alice@…">
+  </div>
+  <div class="group">
+    <label>To</label>
+    <input id="recipientFilter" type="text" placeholder="bob@…">
   </div>
   <div class="group">
     <label>Folder</label>
@@ -423,7 +479,10 @@
 <script>
 const q = document.getElementById('q');
 const senderFilter = document.getElementById('senderFilter');
+const recipientFilter = document.getElementById('recipientFilter');
 const folderFilter = document.getElementById('folderFilter');
+const helpBtn = document.getElementById('helpBtn');
+const cheatsheet = document.getElementById('cheatsheet');
 const dateFrom = document.getElementById('dateFrom');
 const dateTo = document.getElementById('dateTo');
 const hasAtts = document.getElementById('hasAtts');
@@ -891,6 +950,7 @@ function buildQuery() {
   const term = q.value.trim();
   if (term) params.set('q', term);
   if (senderFilter.value) params.set('sender', senderFilter.value);
+  if (recipientFilter.value) params.set('recipient', recipientFilter.value);
   if (folderFilter.value) params.set('folder', folderFilter.value);
   if (dateFrom.value) params.set('date_from', dateFrom.value);
   if (dateTo.value) params.set('date_to', dateTo.value);
@@ -998,6 +1058,7 @@ async function openMessage(id, el) {
 function resetAll() {
   q.value = '';
   senderFilter.value = '';
+  recipientFilter.value = '';
   folderFilter.value = '';
   dateFrom.value = '';
   dateTo.value = '';
@@ -1012,12 +1073,35 @@ function resetAll() {
 resetBtn.addEventListener('click', resetAll);
 
 const debouncedSearch = debounce(() => { offset = 0; search(); }, 200);
-[q, senderFilter, folderFilter, dateFrom, dateTo].forEach(el => el.addEventListener('input', debouncedSearch));
+[q, senderFilter, recipientFilter, folderFilter, dateFrom, dateTo].forEach(el => el.addEventListener('input', debouncedSearch));
 hasAtts.addEventListener('change', debouncedSearch);
 
-// Keyboard: Esc clears the search input
+// Keyboard: Esc clears the search input OR closes the cheatsheet if open
 q.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { q.value = ''; offset = 0; search(); }
+  if (e.key === 'Escape') {
+    if (cheatsheet.classList.contains('open')) {
+      cheatsheet.classList.remove('open');
+    } else {
+      q.value = ''; offset = 0; search();
+    }
+  }
+});
+
+// Cheatsheet popover — toggle on click, close on outside click or Esc
+helpBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  cheatsheet.classList.toggle('open');
+});
+document.addEventListener('click', (e) => {
+  if (cheatsheet.classList.contains('open') &&
+      !cheatsheet.contains(e.target) && e.target !== helpBtn) {
+    cheatsheet.classList.remove('open');
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && cheatsheet.classList.contains('open')) {
+    cheatsheet.classList.remove('open');
+  }
 });
 
 // Refresh the privacy chip from /api/settings so it correctly warns when the
