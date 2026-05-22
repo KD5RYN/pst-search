@@ -171,19 +171,40 @@ PST file --[Node + pst-extractor]--NDJSON--> Python indexer --[SQLite + FTS5]-->
 | --- | --- | --- |
 | PST extractor | `pst_search/node/extract.mjs` | Walks the PST with `pst-extractor`, streams one NDJSON record per message to stdout. |
 | Attachment extractor | `pst_search/node/attachment.mjs` | Pulls a single attachment's bytes from a PST by descriptor node ID. |
-| Python driver | `pst_search/pst.py` | Spawns Node, parses NDJSON, exposes Python iterators and an attachment-fetch function. |
+| Message dump | `pst_search/node/message.mjs` | Full message export (headers + both body forms + every attachment) for `.eml` building. |
+| Python driver | `pst_search/pst.py` | Spawns Node, parses NDJSON, exposes Python iterators, attachment fetch, and full-message export. |
 | Indexer | `pst_search/indexer.py` | Consumes the message stream and bulk-inserts into SQLite. |
-| Database | `pst_search/db.py` | Schema + FTS5 virtual table + search/browse queries. |
-| Server | `pst_search/server.py` | FastAPI endpoints: `/api/search`, `/api/folders`, `/api/message/{id}`, `/api/attachment/{msg}/{idx}`. |
+| Indexing jobs | `pst_search/jobs.py` | Background indexing thread + job registry. Lets the web UI fire off a scan and poll for progress. |
+| Database | `pst_search/db.py` | Schema + FTS5 virtual table + search/browse queries + Gmail-style operator translation. |
+| Server | `pst_search/server.py` | FastAPI endpoints — see below. |
 | Web UI | `pst_search/web/index.html` | Single-file frontend (HTML + inline CSS + JS), no build step. |
 | CLI | `pst_search/cli.py` | `index` / `serve` / `list` entry points. |
 
+**HTTP API:**
+
+| Endpoint | Method | Purpose |
+| --- | --- | --- |
+| `/api/search` | GET | FTS5 search with filters + sort. |
+| `/api/folders` | GET | Distinct folder paths and message counts (for the tree). |
+| `/api/psts` | GET | List of indexed PSTs. |
+| `/api/psts/{pst_id}` | DELETE | Remove a PST from the index. |
+| `/api/pick-pst` | POST | Open a native OS file picker dialog and return the chosen path. |
+| `/api/index` | POST | Start a background indexing job. Body: `{path, options?}`. |
+| `/api/jobs` / `/api/jobs/{id}` | GET | Job progress polling. |
+| `/api/settings` | GET | Runtime config (host, port, db path, local-only flag). |
+| `/api/open-data-folder` | POST | Open the index DB folder in the OS file manager. |
+| `/api/message/{id}` | GET | Message metadata + attachment list. |
+| `/api/message/{id}/export.eml` | GET | Download the message as a standard `.eml` file. |
+| `/api/attachment/{msg}/{idx}` | GET | Stream one attachment's bytes from the source PST. |
+
 ## Performance notes
 
-- Indexing throughput is ~35 messages/sec end-to-end on a typical desktop. An 8GB / 27K-message PST takes ~13 minutes.
-- The Node side caps stored body text at 32 KB per message (configurable via `PST_SEARCH_BODY_CAP`). 32 KB is roughly 5,000+ words — well past the length of normal correspondence.
-- For genuinely enormous messages (over 4 MB total), the HTML body fetch is skipped to keep indexing predictable (`PST_SEARCH_MAX_HTML_FETCH`). On a typical mailbox this affects far less than 1% of messages. Subject, sender, recipients, and folder are always indexed.
-- Recipients are parsed from `transportMessageHeaders` instead of `pst-extractor`'s `getRecipient()` API. The API call hits disk per recipient and dominates indexing time on big PSTs (measured 120 ms/message vs effectively free for header parsing).
+- Indexing throughput is ~35 messages/sec end-to-end on a typical desktop. An 8GB / 27K-message PST takes ~13 minutes with default options.
+- Default body cap is 32 KB per message — roughly 5,000+ words, well past the length of normal correspondence. Marketing emails with hundreds of KB of HTML are truncated, but the useful content (greeting, offer, call-to-action) is always in the first few KB. Tune in the Add-PST dialog or via `--body-cap KB`.
+- By default, messages larger than 4 MB total skip body extraction entirely (subject/sender/recipients/folder still indexed). On a typical mailbox this affects well under 1% of messages. Tune via `--max-html-fetch MB`.
+- Skipping body extraction altogether (`--no-body` or unchecking _Index message bodies_) makes indexing dramatically faster for huge archives where only header-level search matters.
+- Recipients are parsed from `transportMessageHeaders` rather than `pst-extractor`'s `getRecipient()` API, which hits disk per recipient and dominates indexing time on big PSTs (measured 120 ms/message vs effectively free for header parsing).
+- Attachment downloads and `.eml` export each spawn a fresh Node process (~100–300 ms latency per click). Fine for one-off use; not built for batch export. The attachment bytes are never stored in the index — they're streamed straight from the PST on demand.
 
 ## License
 
@@ -202,8 +223,9 @@ This means:
 
 ## Known limitations
 
-- **Search folders are skipped.** Some PSTs have internal "search root" folders (`SPAM Search Folder 2`, `ItemProcSearch`, etc.) that contain search caches rather than user mail; `pst-extractor` can't enumerate them and we explicitly skip them. No real mail is missed.
-- **Body text is capped at 32 KB per message.** Most emails fit well under this; marketing emails with hundreds of KB of HTML get truncated, but the useful content (greeting, offer, call-to-action) is always in the first few KB. Tunable via `PST_SEARCH_BODY_CAP`.
-- **Bodies are skipped for messages larger than 4 MB.** This affects the rare giant message (e.g., one with embedded multi-MB inline images). Their subject/sender/recipients/folder are still indexed. The detail pane shows "(empty body)" for those. Tunable via `PST_SEARCH_MAX_HTML_FETCH`.
-- **No incremental indexing.** Re-running `index` on the same PST replaces all its rows. Fine for static archives; not designed for live mailboxes.
+- **Internal search folders are skipped.** Some PSTs contain auto-generated "search root" folders (`SPAM Search Folder 2`, `ItemProcSearch`, `PST Conversation Lookup`, etc.) that hold search caches rather than user mail. `pst-extractor` can't reliably enumerate them and we explicitly skip them. No real mail is missed.
+- **No incremental indexing.** Re-running `index` on the same PST replaces all its rows. Fine for static archives; not designed for live mailboxes where the source file keeps changing.
+- **The source PST must stay where you indexed it.** We store the absolute path in the database and need to re-open the file for attachment downloads and `.eml` export. If you move or rename the `.pst`, those operations return a clear error and you'll need to re-index.
+- **S/MIME-encrypted messages are not decrypted.** Per-message PKCS#7 encryption requires the recipient's private key — out of scope for this tool. Such messages appear in the index with encrypted-looking body content. Their headers (subject, sender, date) are still searchable.
+- **HTML body is converted to plain text in the search index.** The detail pane shows the stripped text. The original HTML is preserved when you export the message as `.eml`, but the in-app body view is text only. Tradeoff for compact storage and reliable search.
 
