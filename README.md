@@ -13,6 +13,7 @@ A local search engine for Outlook PST files. Index once, then search by subject,
 - **Full-text search** across subject, body, sender, recipients, and folder path. FTS5-ranked, with `<mark>`-highlighted snippets.
 - **Gmail-style operators** in the search box: `from:bob`, `to:alice`, `subject:budget`, `body:meeting`, `folder:inbox`, combined with `AND`/`OR`/`NOT`, quoted phrases, prefix matching (`meet*`), and parentheses. Click the **?** next to the search box for the full cheatsheet.
 - **Browse mode** — leave the search box empty to list messages newest-first; click any folder in the tree to filter to it.
+- **Sort by date or relevance** — dropdown in the result-list header switches between Newest first (default), Oldest first, and Relevance (BM25 ranking for search queries).
 - **Filters**: from, to, folder, date range, has-attachments.
 - **Lazy attachments**: the index stores only filenames and sizes. Clicking an attachment re-opens the PST and extracts that one file on demand. No multi-GB attachment dump on disk.
 - **Multiple PSTs** in one index. Re-indexing a PST replaces its rows in place.

@@ -207,6 +207,21 @@ def translate_query(query: str) -> str:
     return _OPERATOR_RE.sub(repl, query)
 
 
+# How to order rows in the search/browse result list. "relevance" only makes
+# sense for FTS5 search queries (it sorts by bm25); browse mode silently
+# falls back to "newest" when given "relevance".
+_SORT_CHOICES = ("newest", "oldest", "relevance")
+
+
+def _order_by_clause(sort: str, fts: bool) -> str:
+    if sort == "oldest":
+        return "messages.delivery_time ASC NULLS LAST, messages.id ASC"
+    if sort == "relevance" and fts:
+        return "score"
+    # default: newest
+    return "messages.delivery_time DESC NULLS LAST, messages.id DESC"
+
+
 def search(
     conn: sqlite3.Connection,
     query: str | None,
@@ -217,6 +232,7 @@ def search(
     has_attachments: bool | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    sort: str = "newest",
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[sqlite3.Row], int]:
@@ -227,16 +243,18 @@ def search(
     filtered by the structured criteria, ordered by delivery_time DESC —
     this is the "browse a folder" path.
     """
+    if sort not in _SORT_CHOICES:
+        sort = "newest"
     query = (query or "").strip()
     if query:
         return _search_fts(conn, query, sender=sender, recipient=recipient, folder=folder,
                            has_attachments=has_attachments,
                            date_from=date_from, date_to=date_to,
-                           limit=limit, offset=offset)
+                           sort=sort, limit=limit, offset=offset)
     return _browse(conn, sender=sender, recipient=recipient, folder=folder,
                    has_attachments=has_attachments,
                    date_from=date_from, date_to=date_to,
-                   limit=limit, offset=offset)
+                   sort=sort, limit=limit, offset=offset)
 
 
 def _structured_filters(
@@ -268,7 +286,7 @@ def _structured_filters(
     return where, params
 
 
-def _search_fts(conn, query, *, sender, recipient, folder, has_attachments, date_from, date_to, limit, offset):
+def _search_fts(conn, query, *, sender, recipient, folder, has_attachments, date_from, date_to, sort, limit, offset):
     where = ["messages_fts MATCH ?"]
     params: list = [translate_query(query)]
     extra_where, extra_params = _structured_filters(sender, recipient, folder, has_attachments, date_from, date_to)
@@ -297,14 +315,14 @@ def _search_fts(conn, query, *, sender, recipient, folder, has_attachments, date
             JOIN messages ON messages.id = messages_fts.rowid
             JOIN pst_files ON pst_files.pst_id = messages.pst_id
             WHERE {where_sql}
-            ORDER BY score
+            ORDER BY {_order_by_clause(sort, fts=True)}
             LIMIT ? OFFSET ?""",
         params + [limit, offset],
     ).fetchall()
     return rows, total
 
 
-def _browse(conn, *, sender, recipient, folder, has_attachments, date_from, date_to, limit, offset):
+def _browse(conn, *, sender, recipient, folder, has_attachments, date_from, date_to, sort, limit, offset):
     where, params = _structured_filters(sender, recipient, folder, has_attachments, date_from, date_to)
     where_sql = (" WHERE " + " AND ".join(where)) if where else ""
 
@@ -324,7 +342,7 @@ def _browse(conn, *, sender, recipient, folder, has_attachments, date_from, date
             FROM messages
             JOIN pst_files ON pst_files.pst_id = messages.pst_id
             {where_sql}
-            ORDER BY messages.delivery_time DESC NULLS LAST, messages.id DESC
+            ORDER BY {_order_by_clause(sort, fts=False)}
             LIMIT ? OFFSET ?""",
         params + [limit, offset],
     ).fetchall()

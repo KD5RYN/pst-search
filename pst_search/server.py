@@ -66,6 +66,7 @@ def api_search(
     has_attachments: bool | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    sort: str = Query("newest", description="One of: newest, oldest, relevance"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> dict:
@@ -77,6 +78,7 @@ def api_search(
                 sender=sender, recipient=recipient, folder=folder,
                 has_attachments=has_attachments,
                 date_from=date_from, date_to=date_to,
+                sort=sort,
                 limit=limit, offset=offset,
             )
         except Exception as e:

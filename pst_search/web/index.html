@@ -108,6 +108,12 @@
     position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: baseline;
   }
   .pane-header .count { color: var(--fg-dim); font-weight: normal; text-transform: none; letter-spacing: 0; }
+  .sort-select {
+    background: var(--bg-3); color: var(--fg); border: 1px solid var(--border);
+    padding: 3px 6px; border-radius: 4px; font-size: 11px; margin-left: auto;
+  }
+  .sort-select:focus { outline: none; border-color: var(--accent); }
+  .sort-select:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* ---------- Folder tree ---------- */
   .tree { padding: 6px; }
@@ -470,6 +476,11 @@
     <div class="pane-header">
       <span id="listTitle">Messages</span>
       <span class="count" id="searchMeta"></span>
+      <select id="sortSelect" class="sort-select" title="Sort results">
+        <option value="newest">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="relevance">Relevance</option>
+      </select>
     </div>
     <div id="results" class="results"></div>
     <div id="pagination" class="pagination" style="display:none">
@@ -507,6 +518,7 @@ const prevBtn = document.getElementById('prevPage');
 const nextBtn = document.getElementById('nextPage');
 const pageInfo = document.getElementById('pageInfo');
 const indexMeta = document.getElementById('indexMeta');
+const sortSelect = document.getElementById('sortSelect');
 const treeEl = document.getElementById('tree');
 const welcomeEl = document.getElementById('welcome');
 const welcomePickBtn = document.getElementById('welcomePick');
@@ -971,16 +983,32 @@ function buildQuery() {
   if (dateFrom.value) params.set('date_from', dateFrom.value);
   if (dateTo.value) params.set('date_to', dateTo.value);
   if (hasAtts.checked) params.set('has_attachments', 'true');
+  // Server falls back from "relevance" to "newest" in browse mode anyway,
+  // but we still send what the dropdown shows so the round trip is honest.
+  params.set('sort', sortSelect.value);
   params.set('limit', PAGE);
   params.set('offset', offset);
   return params;
 }
 
+function syncSortAvailability() {
+  // "Relevance" only makes sense when there's a query — disable it in browse
+  // mode and snap the dropdown back to "newest" so the visible value matches
+  // what the server is actually doing.
+  const browsing = !q.value.trim();
+  const relevanceOpt = sortSelect.querySelector('option[value="relevance"]');
+  if (relevanceOpt) {
+    relevanceOpt.disabled = browsing;
+    if (browsing && sortSelect.value === 'relevance') sortSelect.value = 'newest';
+  }
+}
+
 async function search() {
   errorBar.innerHTML = '';
+  syncSortAvailability();
   const term = q.value.trim();
   const browsing = !term;
-  listTitle.textContent = browsing ? 'Messages (newest first)' : 'Search results';
+  listTitle.textContent = browsing ? 'Messages' : 'Search results';
   const t0 = performance.now();
   let resp;
   try {
@@ -1100,6 +1128,7 @@ resetBtn.addEventListener('click', resetAll);
 const debouncedSearch = debounce(() => { offset = 0; search(); }, 200);
 [q, senderFilter, recipientFilter, folderFilter, dateFrom, dateTo].forEach(el => el.addEventListener('input', debouncedSearch));
 hasAtts.addEventListener('change', debouncedSearch);
+sortSelect.addEventListener('change', () => { offset = 0; search(); });
 
 // Keyboard: Esc clears the search input OR closes the cheatsheet if open
 q.addEventListener('keydown', (e) => {
