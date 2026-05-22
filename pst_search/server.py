@@ -6,10 +6,16 @@ Static frontend is served from `pst_search/web`.
 """
 from __future__ import annotations
 
+import base64
 import io
 import os
+import re
 import sys
 import threading
+from datetime import datetime
+from email.message import EmailMessage
+from email.parser import HeaderParser
+from email.utils import format_datetime, parsedate_to_datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -108,6 +114,149 @@ def api_message(message_id: int) -> dict:
         }
     finally:
         conn.close()
+
+
+_FILENAME_BAD_CHARS = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+
+
+def _safe_filename(s: str, fallback: str) -> str:
+    """Sanitize a string for use as a downloaded filename."""
+    cleaned = _FILENAME_BAD_CHARS.sub("_", (s or "").strip())
+    cleaned = re.sub(r"\s+", " ", cleaned)[:120].rstrip(". ")
+    return cleaned or fallback
+
+
+# Common header lines that we'll respect from the original PST transport
+# headers when assembling the .eml. Everything else (Message-ID, References,
+# In-Reply-To, Reply-To, etc.) is also preserved verbatim.
+_HEADER_PASSTHROUGH = (
+    "message-id", "references", "in-reply-to", "reply-to",
+    "return-path", "received", "x-originating-ip",
+)
+
+
+def _build_eml(data: dict) -> bytes:
+    """Assemble an RFC 5322 .eml from the JSON dump produced by message.mjs.
+
+    Preserves the original transport headers where possible (Message-ID,
+    threading headers) but overrides content headers since we're putting the
+    body and attachments into fresh MIME parts.
+    """
+    em = EmailMessage()
+
+    # Pre-existing headers — parse with Python's email.parser so folded
+    # multi-line values (e.g. Message-ID continued on next line) are joined
+    # correctly. We copy the threading/routing headers verbatim and let
+    # ourselves overwrite Subject/From/To/Cc below.
+    raw_headers = data.get("transport_headers") or ""
+    original_headers = HeaderParser().parsestr(raw_headers) if raw_headers else None
+    if original_headers is not None:
+        for name in _HEADER_PASSTHROUGH:
+            val = original_headers.get(name)
+            if val:
+                try:
+                    em[name] = val
+                except Exception:
+                    pass
+
+    em["Subject"] = data.get("subject") or "(no subject)"
+    sender_name = data.get("sender_name") or ""
+    sender_email = data.get("sender_email") or ""
+    if sender_email and sender_name:
+        em["From"] = f'"{sender_name}" <{sender_email}>'
+    elif sender_email:
+        em["From"] = sender_email
+    elif sender_name:
+        em["From"] = sender_name
+
+    # To/Cc/Bcc taken from the original headers if present — they preserve
+    # display names and ordering better than anything we could reconstruct.
+    if original_headers is not None:
+        for name in ("To", "Cc", "Bcc"):
+            val = original_headers.get(name)
+            if val:
+                try:
+                    em[name] = val
+                except Exception:
+                    pass
+
+    # Date: pst-extractor hands us ISO 8601 (e.g. 2025-01-28T20:18:00.000Z).
+    # Convert to the RFC 5322 form most clients expect in a Date: header.
+    when = data.get("delivery_time") or data.get("submit_time")
+    if when:
+        try:
+            iso = when.replace("Z", "+00:00")
+            em["Date"] = format_datetime(datetime.fromisoformat(iso))
+        except Exception:
+            try:
+                em["Date"] = format_datetime(parsedate_to_datetime(when))
+            except Exception:
+                em["Date"] = when
+
+    # Body — prefer the HTML form as the alternative since most modern clients
+    # render that one. Always include plain text too so text-only clients
+    # work.
+    body_text = data.get("body_text") or ""
+    body_html = data.get("body_html") or ""
+    if not body_text and body_html:
+        # Crude HTML→text fallback. Better-than-nothing for clients that only
+        # show the plain part.
+        body_text = re.sub(r"<[^>]+>", " ", body_html)
+        body_text = re.sub(r"\s+", " ", body_text).strip()
+    em.set_content(body_text or "(empty body)")
+    if body_html:
+        em.add_alternative(body_html, subtype="html")
+
+    # Attachments
+    for att in data.get("attachments") or []:
+        content_b64 = att.get("content_base64") or ""
+        if not content_b64:
+            continue
+        try:
+            content = base64.b64decode(content_b64)
+        except Exception:
+            continue
+        mime = att.get("mime") or "application/octet-stream"
+        if "/" in mime:
+            maintype, subtype = mime.split("/", 1)
+        else:
+            maintype, subtype = "application", "octet-stream"
+        em.add_attachment(
+            content, maintype=maintype, subtype=subtype,
+            filename=att.get("name") or "attachment.bin",
+        )
+
+    return em.as_bytes()
+
+
+@app.get("/api/message/{message_id}/export.eml")
+def api_export_eml(message_id: int) -> StreamingResponse:
+    conn = dbmod.connect(_db_path())
+    try:
+        msg, _atts, pst = dbmod.get_message(conn, message_id)
+        if msg is None or pst is None:
+            raise HTTPException(status_code=404, detail="message not found")
+        pst_path = pst["path"]
+        pff_id = str(msg["pff_identifier"])
+        subject = msg["subject"]
+    finally:
+        conn.close()
+
+    if not Path(pst_path).exists():
+        raise HTTPException(status_code=410, detail=f"source PST no longer at {pst_path}")
+
+    try:
+        data = pstmod.export_message(pst_path, pff_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"export failed: {e}")
+
+    eml = _build_eml(data)
+    filename = _safe_filename(subject, f"message_{message_id}") + ".eml"
+    return StreamingResponse(
+        io.BytesIO(eml),
+        media_type="message/rfc822",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @app.get("/api/attachment/{message_id}/{att_index}")

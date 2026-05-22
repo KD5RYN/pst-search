@@ -195,6 +195,28 @@ def iter_messages(pst_path: str | Path, options: dict | None = None) -> Iterator
             raise RuntimeError(f"extract.mjs exited {rc}. Last stderr:\n{tail}")
 
 
+def export_message(pst_path: str | Path, descriptor_node_id: str) -> dict:
+    """Return a full dump of a message — headers, both body forms, and every
+    attachment's bytes — as a dict. Used to assemble a .eml export.
+    """
+    node = _resolve_node()
+    script = _node_scripts_dir() / "message.mjs"
+    if not script.exists():
+        raise RuntimeError(f"missing message.mjs at {script}")
+    proc = subprocess.Popen(
+        [node, str(script), str(pst_path), str(descriptor_node_id)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    stdout, stderr = proc.communicate(timeout=300)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"message.mjs failed (rc={proc.returncode}): {stderr.decode('utf-8', errors='replace')}"
+        )
+    import json
+    return json.loads(stdout)
+
+
 def extract_attachment(pst_path: str | Path, descriptor_node_id: str, attachment_index: int) -> tuple[str, bytes]:
     """Run attachment.mjs and return (filename, bytes)."""
     node = _resolve_node()

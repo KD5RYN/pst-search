@@ -167,6 +167,18 @@
   .detail { padding: 22px 28px; }
   .detail.empty { color: var(--fg-dim); text-align: center; padding-top: 80px; }
   .detail h2 { margin: 0 0 14px; font-size: 18px; word-break: break-word; }
+  .detail .subject-row {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    gap: 12px; margin-bottom: 14px;
+  }
+  .detail .subject-row h2 { margin: 0; flex: 1; }
+  .detail .export-btn {
+    background: var(--bg-3); color: var(--accent); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    text-decoration: none; white-space: nowrap; flex-shrink: 0;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .detail .export-btn:hover { border-color: var(--accent); }
   .detail .hdr { display: grid; grid-template-columns: 100px 1fr; gap: 4px 10px; font-size: 13px; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
   .detail .hdr .k { color: var(--fg-dim); }
   .detail .hdr .v { word-break: break-word; }
@@ -1096,7 +1108,12 @@ async function openMessage(id, el) {
       }</div>`
     : '';
   detail.innerHTML = `
-    <h2>${escapeHtml(message.subject || '(no subject)')}</h2>
+    <div class="subject-row">
+      <h2>${escapeHtml(message.subject || '(no subject)')}</h2>
+      <a class="export-btn" href="/api/message/${id}/export.eml"
+         title="Download this message as a .eml file you can forward or open in any email client"
+         download>⬇ Download .eml</a>
+    </div>
     <div class="hdr">
       <div class="k">From</div><div class="v">${escapeHtml(message.sender_name || '')} ${message.sender_email ? '&lt;' + escapeHtml(message.sender_email) + '&gt;' : ''}</div>
       <div class="k">Recipients</div><div class="v">${escapeHtml(message.recipients || '(none recorded)')}</div>
