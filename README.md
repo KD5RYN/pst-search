@@ -19,20 +19,30 @@ A local search engine for Outlook PST files. Index once, then search by subject,
 
 ### Prerequisites (one-time per machine)
 
+The app needs Python and Node.js at runtime. **Git is not required** — you can either `git clone` or just download the source as a ZIP.
+
 | | Windows | macOS | Linux (Ubuntu/Debian) |
 | --- | --- | --- | --- |
 | Python 3.10+ | `winget install Python.Python.3.12` | `brew install python@3.12` | `sudo apt install python3 python3-pip python3-tk python3-venv` |
 | Node.js 18+ | `winget install OpenJS.NodeJS.LTS` | `brew install node` | `sudo apt install nodejs npm` |
-| Git | `winget install Git.Git` | pre-installed with Xcode CLT | `sudo apt install git` |
 
 > **macOS Homebrew users**: also run `brew install python-tk@3.12` so the file picker dialog works. (The python.org installer includes it already.)
+
+### Get the source
+
+Either:
+
+```bash
+# If you have git installed:
+git clone https://github.com/KD5RYN/pst-search
+cd pst-search
+```
+
+…or **download as a ZIP** from <https://github.com/KD5RYN/pst-search> (green **Code** button → **Download ZIP**), then unzip and `cd` into the folder.
 
 ### Install
 
 ```bash
-git clone https://github.com/YOUR-USER/pst-search
-cd pst-search
-
 # macOS / Linux:
 ./bootstrap.sh
 
