@@ -2,6 +2,8 @@
 
 A local search engine for Outlook PST files. Index once, then search by subject, body, sender, recipients, folder, or date — and pull attachments directly from the source PST on demand. Built around SQLite FTS5 for instant full-text search.
 
+![PST Search UI — folder tree, search results, message detail](docs/screenshot.png)
+
 ## Why this exists
 
 `libpff` (the standard PST reader used by most Python tools) has a long-standing unfixed bug — `libpff_table_read: invalid table - missing data identifier` — that makes it unable to read certain real-world PSTs, especially those produced by recent Outlook versions. We hit that on a real 8GB mailbox: libpff couldn't read a single message. `pst-search` uses an independent codebase (`pst-extractor`, a Node.js port of `java-libpst`) and reads PSTs that libpff cannot.
