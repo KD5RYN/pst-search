@@ -1,0 +1,792 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>PST Search</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --bg: #0f1419;
+    --bg-2: #1a2028;
+    --bg-3: #232b35;
+    --fg: #e6edf3;
+    --fg-dim: #8b949e;
+    --accent: #58a6ff;
+    --accent-2: #79c0ff;
+    --border: #30363d;
+    --mark: #ffd33d;
+    --mark-fg: #24292f;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.4; }
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ---------- Top bar: title + search ---------- */
+  header.topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 10px 20px;
+    background: var(--bg-2);
+    border-bottom: 1px solid var(--border);
+  }
+  header.topbar h1 { margin: 0; font-size: 15px; font-weight: 600; white-space: nowrap; }
+  header.topbar .search-wrap {
+    flex: 1; max-width: 720px; position: relative;
+  }
+  header.topbar input.search {
+    width: 100%;
+    background: var(--bg-3); border: 1px solid var(--border); color: var(--fg);
+    padding: 8px 12px 8px 32px; border-radius: 6px; font-size: 14px;
+  }
+  header.topbar input.search:focus { outline: none; border-color: var(--accent); }
+  header.topbar .search-icon {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--fg-dim); pointer-events: none; font-size: 14px;
+  }
+  header.topbar .meta { color: var(--fg-dim); font-size: 12px; white-space: nowrap; }
+
+  /* ---------- Filter bar below header ---------- */
+  .filter-bar {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 16px;
+    padding: 8px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .filter-bar .group { display: flex; align-items: center; gap: 6px; }
+  .filter-bar label { color: var(--fg-dim); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .filter-bar input[type="text"], .filter-bar input[type="date"] {
+    background: var(--bg-3); border: 1px solid var(--border); color: var(--fg);
+    padding: 3px 8px; border-radius: 4px; font-size: 12px; min-width: 0; width: 130px;
+  }
+  .filter-bar input[type="date"] { width: 130px; }
+  .filter-bar input:focus { outline: none; border-color: var(--accent); }
+  .filter-bar .check { display: inline-flex; align-items: center; gap: 4px; color: var(--fg); }
+  .filter-bar .reset {
+    margin-left: auto; background: none; border: none; color: var(--fg-dim); cursor: pointer;
+    font-size: 11px; padding: 3px 6px; border-radius: 3px;
+  }
+  .filter-bar .reset:hover { color: var(--fg); background: var(--bg-2); }
+
+  /* ---------- Main three-pane layout ---------- */
+  main {
+    display: grid; grid-template-columns: 240px 420px 1fr;
+    flex: 1; min-height: 0;
+  }
+  .pane { overflow-y: auto; border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+  .pane:last-child { border-right: none; }
+  .pane-header {
+    padding: 10px 14px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--fg-dim); background: var(--bg); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 1; display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .pane-header .count { color: var(--fg-dim); font-weight: normal; text-transform: none; letter-spacing: 0; }
+
+  /* ---------- Folder tree ---------- */
+  .tree { padding: 6px; }
+  .tree .node {
+    display: flex; align-items: center; padding: 4px 8px; border-radius: 4px;
+    cursor: pointer; font-size: 13px; gap: 4px; user-select: none;
+  }
+  .tree .node:hover { background: var(--bg-2); }
+  .tree .node.active { background: var(--bg-3); color: var(--accent-2); }
+  .tree .node .caret { width: 12px; color: var(--fg-dim); flex-shrink: 0; font-size: 10px; }
+  .tree .node .label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree .node .count { color: var(--fg-dim); font-size: 11px; margin-left: 6px; flex-shrink: 0; }
+  .tree .all { font-weight: 500; margin-bottom: 4px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+
+  /* ---------- Result list ---------- */
+  .results { flex: 1; overflow-y: auto; }
+  .result {
+    padding: 10px 14px; border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .result:hover { background: var(--bg-2); }
+  .result.selected { background: var(--bg-3); border-left: 2px solid var(--accent); padding-left: 12px; }
+  .result .row1 { display: flex; align-items: baseline; gap: 8px; margin-bottom: 3px; }
+  .result .from { color: var(--accent-2); font-size: 12px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .result .when { color: var(--fg-dim); font-size: 11px; flex-shrink: 0; }
+  .result .subj { font-weight: 500; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .result .badge { display: inline-block; font-size: 10px; padding: 0 6px; background: var(--bg-3); border-radius: 10px; margin-left: 6px; color: var(--fg-dim); vertical-align: middle; }
+  .result .snippet { color: var(--fg-dim); font-size: 12px; line-height: 1.4; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .result .snippet mark { background: var(--mark); color: var(--mark-fg); padding: 0 2px; border-radius: 2px; font-weight: 500; }
+  .pagination {
+    padding: 10px; display: flex; justify-content: center; gap: 8px;
+    border-top: 1px solid var(--border); background: var(--bg);
+  }
+  .pagination button {
+    background: var(--bg-3); color: var(--fg); border: 1px solid var(--border);
+    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+  .pagination .info { align-self: center; color: var(--fg-dim); font-size: 12px; }
+
+  /* ---------- Message detail ---------- */
+  .detail { padding: 22px 28px; }
+  .detail.empty { color: var(--fg-dim); text-align: center; padding-top: 80px; }
+  .detail h2 { margin: 0 0 14px; font-size: 18px; word-break: break-word; }
+  .detail .hdr { display: grid; grid-template-columns: 100px 1fr; gap: 4px 10px; font-size: 13px; margin-bottom: 18px; padding-bottom: 18px; border-bottom: 1px solid var(--border); }
+  .detail .hdr .k { color: var(--fg-dim); }
+  .detail .hdr .v { word-break: break-word; }
+  .detail .body { white-space: pre-wrap; word-wrap: break-word; font-size: 13px; padding: 14px; background: var(--bg-2); border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .detail .atts { margin-top: 18px; }
+  .detail .atts h3 { font-size: 11px; margin: 0 0 8px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: 0.5px; }
+  .detail .atts a {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px;
+    margin: 2px 4px 2px 0; background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: 4px; text-decoration: none; color: var(--accent); font-size: 12px;
+  }
+  .detail .atts a:hover { border-color: var(--accent); }
+  .detail .atts .size { color: var(--fg-dim); font-size: 11px; }
+
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--fg-dim); font-size: 13px; }
+  .error { padding: 12px 16px; background: #5a1d1d; color: #ffb4b4; border-bottom: 1px solid var(--border); font-size: 12px; }
+
+  /* ---------- Manage button + privacy chip in header ---------- */
+  .header-btn {
+    background: var(--bg-3); color: var(--fg); border: 1px solid var(--border);
+    padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .header-btn:hover { border-color: var(--accent); }
+  .header-btn.primary { background: var(--accent); color: #0b0f14; border-color: var(--accent); font-weight: 500; }
+  .privacy-chip {
+    font-size: 11px; color: #7ce38b;
+    border: 1px solid #2d5a3a; background: #0f1f15;
+    padding: 3px 8px; border-radius: 10px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  /* ---------- Modal (manage PSTs) ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: center; justify-content: center; z-index: 100;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
+    width: 90%; max-width: 720px; max-height: 80vh; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .modal-head {
+    padding: 14px 20px; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-head h2 { margin: 0; font-size: 15px; }
+  .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+  .modal-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+  .close-x { background: none; border: none; color: var(--fg-dim); font-size: 18px; cursor: pointer; padding: 0 4px; }
+  .close-x:hover { color: var(--fg); }
+  .pst-row {
+    padding: 12px; border: 1px solid var(--border); border-radius: 6px;
+    margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
+  }
+  .pst-row .info { flex: 1; min-width: 0; }
+  .pst-row .path { font-weight: 500; font-size: 13px; word-break: break-all; }
+  .pst-row .meta { color: var(--fg-dim); font-size: 11px; margin-top: 2px; }
+  .pst-row .danger-btn {
+    background: transparent; border: 1px solid #5a3030; color: #ffb4b4;
+    padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 12px;
+  }
+  .pst-row .danger-btn:hover { background: #5a1d1d; }
+
+  /* ---------- Active indexing job progress ---------- */
+  .job-card {
+    padding: 14px; background: var(--bg-3); border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 8px;
+  }
+  .job-card .label { font-size: 13px; margin-bottom: 6px; word-break: break-all; }
+  .job-card .meta { color: var(--fg-dim); font-size: 12px; margin-bottom: 8px; }
+  .progress {
+    height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; margin-bottom: 4px;
+  }
+  .progress .bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.3s ease; }
+  .progress.indeterminate .bar {
+    width: 30%;
+    animation: slide 1.4s ease-in-out infinite;
+  }
+  @keyframes slide { 0%, 100% { margin-left: 0%; } 50% { margin-left: 70%; } }
+
+  /* ---------- Welcome / first-run ---------- */
+  .welcome {
+    position: fixed; inset: 51px 0 0 0; /* below header */
+    background: var(--bg); display: flex; align-items: center; justify-content: center;
+    flex-direction: column; gap: 18px; padding: 20px; text-align: center; z-index: 50;
+  }
+  .welcome h2 { font-size: 22px; margin: 0; font-weight: 500; }
+  .welcome p { color: var(--fg-dim); max-width: 480px; margin: 0; line-height: 1.6; }
+  .welcome .big-btn {
+    background: var(--accent); color: #0b0f14; border: none;
+    padding: 12px 24px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 500;
+  }
+  .welcome .big-btn:hover { filter: brightness(1.1); }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <h1>📧 PST Search</h1>
+  <div class="search-wrap">
+    <span class="search-icon">🔍</span>
+    <input id="q" class="search" type="search" placeholder="Search subject, body, from, recipients…  (empty = browse all)" autofocus autocomplete="off">
+  </div>
+  <span class="meta" id="indexMeta">loading…</span>
+  <span class="privacy-chip" title="Server is bound to 127.0.0.1 — only accessible from this machine. No data leaves your computer.">🔒 Local only</span>
+  <button id="manageBtn" class="header-btn">📁 Manage PSTs</button>
+</header>
+
+<div class="filter-bar">
+  <div class="group">
+    <label>From</label>
+    <input id="senderFilter" type="text" placeholder="alice@…">
+  </div>
+  <div class="group">
+    <label>Folder</label>
+    <input id="folderFilter" type="text" placeholder="(click tree)">
+  </div>
+  <div class="group">
+    <label>From date</label>
+    <input id="dateFrom" type="date">
+  </div>
+  <div class="group">
+    <label>To date</label>
+    <input id="dateTo" type="date">
+  </div>
+  <label class="check">
+    <input id="hasAtts" type="checkbox"> Has attachments
+  </label>
+  <button id="reset" class="reset" title="Clear search and filters">Reset</button>
+</div>
+
+<div id="errorBar"></div>
+
+<!-- Welcome screen for first-run / empty index -->
+<div id="welcome" class="welcome" style="display:none">
+  <h2>Welcome to PST Search</h2>
+  <p>Pick an Outlook PST file from your computer to begin. The file stays on your machine — indexing and searching happen locally, and nothing is uploaded anywhere.</p>
+  <button id="welcomePick" class="big-btn">Choose a PST file</button>
+  <div id="welcomeStatus" style="color: var(--fg-dim); font-size: 12px;"></div>
+</div>
+
+<!-- Manage PSTs modal -->
+<div id="modal" class="modal-overlay" role="dialog">
+  <div class="modal">
+    <div class="modal-head">
+      <h2>Manage indexed PSTs</h2>
+      <button class="close-x" id="modalClose" aria-label="Close">×</button>
+    </div>
+    <div class="modal-body">
+      <div id="jobsList"></div>
+      <div id="pstsList"></div>
+    </div>
+    <div class="modal-foot">
+      <button id="addPstBtn" class="header-btn primary">+ Add another PST</button>
+    </div>
+  </div>
+</div>
+
+<main>
+  <!-- Folder tree -->
+  <div class="pane">
+    <div class="pane-header">Folders</div>
+    <div id="tree" class="tree"></div>
+  </div>
+
+  <!-- Message list -->
+  <div class="pane">
+    <div class="pane-header">
+      <span id="listTitle">Messages</span>
+      <span class="count" id="searchMeta"></span>
+    </div>
+    <div id="results" class="results"></div>
+    <div id="pagination" class="pagination" style="display:none">
+      <button id="prevPage">‹ Prev</button>
+      <span id="pageInfo" class="info"></span>
+      <button id="nextPage">Next ›</button>
+    </div>
+  </div>
+
+  <!-- Message detail -->
+  <div class="pane">
+    <div class="pane-header">Message</div>
+    <div id="detail" class="detail empty">Select a message to view it here.</div>
+  </div>
+</main>
+
+<script>
+const q = document.getElementById('q');
+const senderFilter = document.getElementById('senderFilter');
+const folderFilter = document.getElementById('folderFilter');
+const dateFrom = document.getElementById('dateFrom');
+const dateTo = document.getElementById('dateTo');
+const hasAtts = document.getElementById('hasAtts');
+const resetBtn = document.getElementById('reset');
+const resultsEl = document.getElementById('results');
+const searchMeta = document.getElementById('searchMeta');
+const listTitle = document.getElementById('listTitle');
+const errorBar = document.getElementById('errorBar');
+const detail = document.getElementById('detail');
+const pagination = document.getElementById('pagination');
+const prevBtn = document.getElementById('prevPage');
+const nextBtn = document.getElementById('nextPage');
+const pageInfo = document.getElementById('pageInfo');
+const indexMeta = document.getElementById('indexMeta');
+const treeEl = document.getElementById('tree');
+const welcomeEl = document.getElementById('welcome');
+const welcomePickBtn = document.getElementById('welcomePick');
+const welcomeStatus = document.getElementById('welcomeStatus');
+const manageBtn = document.getElementById('manageBtn');
+const modal = document.getElementById('modal');
+const modalClose = document.getElementById('modalClose');
+const addPstBtn = document.getElementById('addPstBtn');
+const jobsListEl = document.getElementById('jobsList');
+const pstsListEl = document.getElementById('pstsList');
+
+const PAGE = 50;
+let offset = 0;
+let total = 0;
+let activeFolderPath = null;
+
+function debounce(fn, ms) {
+  let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+}
+
+function formatBytes(n) {
+  if (!n) return '0 B';
+  const u = ['B','KB','MB','GB']; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return `${n.toFixed(n >= 10 || i === 0 ? 0 : 1)} ${u[i]}`;
+}
+function escapeHtml(s) { if (!s) return ''; return s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function escapeAttr(s) { return (s || '').replace(/"/g, '&quot;'); }
+// Snippets arrive with literal <mark>…</mark> markers from FTS5. We escape
+// EVERYTHING first (so any HTML in the message body is neutralized), then
+// surgically restore the mark tags. The previous version tried to skip the
+// mark angle-brackets inline and produced malformed tags like "<mark&gt;",
+// which the browser parsed as an unclosed element — the visible symptom was
+// each subsequent result indenting further to the right.
+function escapeSnippet(s) {
+  if (!s) return '';
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/&lt;mark&gt;/g, '<mark>')
+    .replace(/&lt;\/mark&gt;/g, '</mark>');
+}
+
+let cachedPsts = [];
+async function loadIndexMeta() {
+  try {
+    const r = await fetch('/api/psts');
+    const j = await r.json();
+    cachedPsts = j.psts || [];
+    const n = cachedPsts.reduce((s, p) => s + (p.message_count || 0), 0);
+    indexMeta.textContent = `${cachedPsts.length} PST${cachedPsts.length === 1 ? '' : 's'} · ${n.toLocaleString()} messages`;
+    // Welcome screen visible only when there's literally no indexed content.
+    if (cachedPsts.length === 0 || n === 0) {
+      welcomeEl.style.display = 'flex';
+    } else {
+      welcomeEl.style.display = 'none';
+    }
+  } catch (e) {
+    indexMeta.textContent = '(no index)';
+    welcomeEl.style.display = 'flex';
+  }
+}
+
+/* ---------- File picker + indexing ---------- */
+async function pickPst() {
+  // The picker opens a native dialog on the server-side machine (which is the
+  // user's, since the server is local-only). Returns {path: "..."} or null.
+  const r = await fetch('/api/pick-pst', { method: 'POST' });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: 'picker failed' }));
+    throw new Error(err.detail || 'picker failed');
+  }
+  const j = await r.json();
+  return j.path;
+}
+
+async function startIndex(path) {
+  const r = await fetch('/api/index', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({ detail: 'index start failed' }));
+    throw new Error(err.detail || 'index start failed');
+  }
+  return r.json();
+}
+
+const activeJobs = new Map();   // jobId -> last status object
+let jobsTimer = null;
+
+async function pollJobs() {
+  try {
+    const r = await fetch('/api/jobs');
+    const { jobs } = await r.json();
+    let anyActive = false;
+    // Build a fresh map so jobs the server has forgotten don't linger here.
+    activeJobs.clear();
+    for (const j of jobs) {
+      activeJobs.set(j.id, j);
+      if (j.status === 'queued' || j.status === 'running') anyActive = true;
+    }
+    renderJobs();
+    if (anyActive) {
+      jobsTimer = setTimeout(pollJobs, 1000);
+    } else {
+      // When the last job ends, refresh meta/folders/results so the new PST
+      // shows up everywhere it should.
+      jobsTimer = null;
+      loadIndexMeta();
+      loadFolders();
+      search();
+      renderPstsList();
+    }
+  } catch (e) {
+    jobsTimer = setTimeout(pollJobs, 3000);
+  }
+}
+
+function ensurePollLoop() {
+  if (!jobsTimer) pollJobs();
+}
+
+function renderJobs() {
+  if (!modal.classList.contains('open') && welcomeEl.style.display !== 'flex') return;
+  // Only show jobs that are still in-flight or that errored out. Successfully
+  // completed jobs have already triggered a UI refresh and don't need to
+  // linger in the modal as "Done" cards.
+  const visible = [...activeJobs.values()].filter(j => j.status !== 'done');
+  const cards = visible.map(j => {
+    const isActive = j.status === 'queued' || j.status === 'running';
+    const isError  = j.status === 'error';
+    const bar = isActive
+      ? `<div class="progress indeterminate"><div class="bar"></div></div>`
+      : '';
+    const status = isError
+      ? `<span style="color:#ffb4b4">Failed · ${escapeHtml(j.error || '')}</span>`
+      : `Indexed ${j.indexed.toLocaleString()} messages so far · ${j.elapsed}s elapsed`;
+    return `
+      <div class="job-card">
+        <div class="label">${escapeHtml(j.path)}</div>
+        <div class="meta">${status}</div>
+        ${bar}
+      </div>
+    `;
+  });
+  jobsListEl.innerHTML = cards.length ? `<h3 style="font-size:11px; color:var(--fg-dim); text-transform:uppercase; letter-spacing:0.5px; margin: 0 0 8px;">Active jobs</h3>${cards.join('')}` : '';
+
+  // Mirror status into the welcome screen too
+  const running = [...activeJobs.values()].find(j => j.status === 'running' || j.status === 'queued');
+  if (welcomeEl.style.display === 'flex') {
+    if (running) {
+      welcomePickBtn.style.display = 'none';
+      welcomeStatus.innerHTML = `<div style="margin-bottom: 10px;">Indexing ${escapeHtml(running.path)}…</div><div style="font-size:13px;">${running.indexed.toLocaleString()} messages · ${running.elapsed}s</div>`;
+    } else {
+      welcomePickBtn.style.display = '';
+      welcomeStatus.textContent = '';
+    }
+  }
+}
+
+async function renderPstsList() {
+  // Always re-fetch in case something changed since loadIndexMeta
+  const r = await fetch('/api/psts');
+  const { psts } = await r.json();
+  cachedPsts = psts || [];
+  if (!cachedPsts.length) {
+    pstsListEl.innerHTML = '<div class="empty-state">No PSTs indexed yet. Click "Add another PST" below.</div>';
+    return;
+  }
+  pstsListEl.innerHTML = `
+    <h3 style="font-size:11px; color:var(--fg-dim); text-transform:uppercase; letter-spacing:0.5px; margin: 16px 0 8px;">Indexed PSTs</h3>
+    ${cachedPsts.map(p => `
+      <div class="pst-row">
+        <div class="info">
+          <div class="path">${escapeHtml(p.path)}</div>
+          <div class="meta">${p.message_count.toLocaleString()} messages · indexed ${escapeHtml(p.indexed_at)}</div>
+        </div>
+        <button class="danger-btn" data-pst-id="${p.pst_id}">Remove</button>
+      </div>
+    `).join('')}
+  `;
+  pstsListEl.querySelectorAll('.danger-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const id = btn.dataset.pstId;
+      const p = cachedPsts.find(x => String(x.pst_id) === id);
+      if (!confirm(`Remove this PST from the index?\n\n${p?.path}\n\n(${(p?.message_count || 0).toLocaleString()} messages will be deleted from the index. The original PST file is not touched.)`)) return;
+      const r = await fetch(`/api/psts/${id}`, { method: 'DELETE' });
+      if (!r.ok) {
+        const err = await r.json().catch(() => ({}));
+        alert(`Failed: ${err.detail || r.status}`);
+        return;
+      }
+      await loadIndexMeta();
+      await loadFolders();
+      await renderPstsList();
+      search();
+    });
+  });
+}
+
+async function addPstFlow(context) {
+  // context is 'welcome' or 'modal' so we can show error inline
+  let path;
+  try {
+    path = await pickPst();
+  } catch (e) {
+    if (context === 'welcome') {
+      welcomeStatus.innerHTML = `<span style="color:#ffb4b4">File picker failed: ${escapeHtml(String(e.message || e))}</span>`;
+    } else {
+      alert('File picker failed: ' + (e.message || e));
+    }
+    return;
+  }
+  if (!path) return;   // user cancelled
+  try {
+    await startIndex(path);
+    ensurePollLoop();
+    if (context === 'modal') renderPstsList();
+  } catch (e) {
+    if (context === 'welcome') {
+      welcomeStatus.innerHTML = `<span style="color:#ffb4b4">${escapeHtml(String(e.message || e))}</span>`;
+    } else {
+      alert(e.message || String(e));
+    }
+  }
+}
+
+/* ---------- Modal open/close ---------- */
+manageBtn.addEventListener('click', () => {
+  modal.classList.add('open');
+  renderPstsList();
+  pollJobs();   // also drives the active-jobs section
+});
+modalClose.addEventListener('click', () => modal.classList.remove('open'));
+modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('open'); });
+addPstBtn.addEventListener('click', () => addPstFlow('modal'));
+welcomePickBtn.addEventListener('click', () => addPstFlow('welcome'));
+
+
+/* ---------- Folder tree ---------- */
+function buildTree(folders) {
+  const root = { name: '', path: '', children: {}, count: 0 };
+  for (const f of folders) {
+    const parts = (f.folder_path || '').split('/').filter(Boolean);
+    let node = root;
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      if (!node.children[part]) {
+        node.children[part] = { name: part, path: parts.slice(0, i + 1).join('/'), children: {}, count: 0 };
+      }
+      node = node.children[part];
+    }
+    node.count += f.message_count;
+    node.fullPath = f.folder_path;
+  }
+  function rollup(n) {
+    let sum = n.count;
+    for (const k of Object.keys(n.children)) sum += rollup(n.children[k]);
+    n.totalCount = sum; return sum;
+  }
+  rollup(root);
+  return root;
+}
+
+function renderTree(node) {
+  const html = [
+    `<div class="node all" data-path="">
+       <span class="caret"></span>
+       <span class="label">All messages</span>
+       <span class="count">${node.totalCount.toLocaleString()}</span>
+     </div>`
+  ];
+  function walk(n, depth) {
+    const keys = Object.keys(n.children).sort();
+    for (const k of keys) {
+      const child = n.children[k];
+      const hasKids = Object.keys(child.children).length > 0;
+      html.push(
+        `<div class="node" data-path="${escapeAttr(child.path)}" style="padding-left:${8 + depth * 14}px">
+           <span class="caret">${hasKids ? '▸' : '·'}</span>
+           <span class="label" title="${escapeAttr(child.path)}">${escapeHtml(child.name)}</span>
+           <span class="count">${child.totalCount.toLocaleString()}</span>
+         </div>`
+      );
+      walk(child, depth + 1);
+    }
+  }
+  walk(node, 0);
+  treeEl.innerHTML = html.join('');
+  treeEl.querySelectorAll('.node').forEach(el => {
+    el.addEventListener('click', () => selectFolder(el.dataset.path || '', el));
+  });
+  // Highlight "All" by default
+  const allNode = treeEl.querySelector('.node.all');
+  if (allNode) allNode.classList.add('active');
+}
+
+function selectFolder(path, el) {
+  treeEl.querySelectorAll('.node.active').forEach(n => n.classList.remove('active'));
+  if (el) el.classList.add('active');
+  activeFolderPath = path || null;
+  folderFilter.value = path || '';
+  offset = 0;
+  search();
+}
+
+async function loadFolders() {
+  try {
+    const r = await fetch('/api/folders');
+    const j = await r.json();
+    renderTree(buildTree(j.folders));
+  } catch (e) {
+    treeEl.innerHTML = '<div class="empty-state">(no folders)</div>';
+  }
+}
+
+/* ---------- Search / browse ---------- */
+function buildQuery() {
+  const params = new URLSearchParams();
+  const term = q.value.trim();
+  if (term) params.set('q', term);
+  if (senderFilter.value) params.set('sender', senderFilter.value);
+  if (folderFilter.value) params.set('folder', folderFilter.value);
+  if (dateFrom.value) params.set('date_from', dateFrom.value);
+  if (dateTo.value) params.set('date_to', dateTo.value);
+  if (hasAtts.checked) params.set('has_attachments', 'true');
+  params.set('limit', PAGE);
+  params.set('offset', offset);
+  return params;
+}
+
+async function search() {
+  errorBar.innerHTML = '';
+  const term = q.value.trim();
+  const browsing = !term;
+  listTitle.textContent = browsing ? 'Messages (newest first)' : 'Search results';
+  const t0 = performance.now();
+  let resp;
+  try {
+    resp = await fetch('/api/search?' + buildQuery().toString());
+  } catch (e) {
+    errorBar.innerHTML = `<div class="error">network error: ${escapeHtml(String(e))}</div>`;
+    return;
+  }
+  const j = await resp.json();
+  if (!resp.ok) {
+    errorBar.innerHTML = `<div class="error">${escapeHtml(j.detail || 'search error')}</div>`;
+    return;
+  }
+  total = j.total;
+  const dt = (performance.now() - t0).toFixed(0);
+  searchMeta.textContent = `${total.toLocaleString()} · ${dt}ms`;
+  renderResults(j.results, browsing);
+  updatePagination();
+}
+
+function renderResults(rows, browsing) {
+  if (!rows.length) {
+    resultsEl.innerHTML = '<div class="empty-state">No messages match.</div>';
+    return;
+  }
+  resultsEl.innerHTML = rows.map(r => {
+    const fromName = r.sender_name || '';
+    const fromEmail = r.sender_email || '';
+    const fromText = fromName && fromEmail ? `${fromName} <${fromEmail}>` : (fromName || fromEmail || '(unknown sender)');
+    const when = r.delivery_time ? r.delivery_time.replace('T', ' ').slice(0, 16) : '';
+    return `
+      <div class="result" data-id="${r.id}">
+        <div class="row1">
+          <div class="from">${escapeHtml(fromText)}</div>
+          <div class="when">${escapeHtml(when)}</div>
+        </div>
+        <div class="subj">${escapeHtml(r.subject || '(no subject)')}${r.attachment_count ? `<span class="badge">📎 ${r.attachment_count}</span>` : ''}</div>
+        <div class="snippet">${browsing ? escapeHtml(r.snippet || '') : escapeSnippet(r.snippet || '')}</div>
+      </div>`;
+  }).join('');
+  resultsEl.querySelectorAll('.result').forEach(el => {
+    el.addEventListener('click', () => openMessage(parseInt(el.dataset.id, 10), el));
+  });
+}
+
+function updatePagination() {
+  if (total <= PAGE) { pagination.style.display = 'none'; return; }
+  pagination.style.display = 'flex';
+  const start = offset + 1;
+  const end = Math.min(offset + PAGE, total);
+  pageInfo.textContent = `${start.toLocaleString()}–${end.toLocaleString()} of ${total.toLocaleString()}`;
+  prevBtn.disabled = offset === 0;
+  nextBtn.disabled = end >= total;
+}
+
+prevBtn.addEventListener('click', () => { offset = Math.max(0, offset - PAGE); search(); });
+nextBtn.addEventListener('click', () => { offset = offset + PAGE; search(); });
+
+async function openMessage(id, el) {
+  document.querySelectorAll('.result.selected').forEach(e => e.classList.remove('selected'));
+  if (el) el.classList.add('selected');
+  detail.classList.remove('empty');
+  detail.innerHTML = '<div class="empty-state">Loading…</div>';
+  const r = await fetch(`/api/message/${id}`);
+  if (!r.ok) {
+    detail.innerHTML = `<div class="error">Failed to load message: ${r.status}</div>`; return;
+  }
+  const { message, attachments } = await r.json();
+  const atts = attachments.length
+    ? `<div class="atts"><h3>Attachments (${attachments.length})</h3>${
+        attachments.map(a => `
+          <a href="/api/attachment/${id}/${a.att_index}" target="_blank" rel="noopener" download="${escapeAttr(a.name || ('attachment_' + a.att_index))}">
+            📎 ${escapeHtml(a.name || ('attachment_' + a.att_index))}
+            <span class="size">${formatBytes(a.size)}</span>
+          </a>`).join('')
+      }</div>`
+    : '';
+  detail.innerHTML = `
+    <h2>${escapeHtml(message.subject || '(no subject)')}</h2>
+    <div class="hdr">
+      <div class="k">From</div><div class="v">${escapeHtml(message.sender_name || '')} ${message.sender_email ? '&lt;' + escapeHtml(message.sender_email) + '&gt;' : ''}</div>
+      <div class="k">Recipients</div><div class="v">${escapeHtml(message.recipients || '(none recorded)')}</div>
+      <div class="k">Date</div><div class="v">${escapeHtml(message.delivery_time || message.submit_time || '')}</div>
+      <div class="k">Folder</div><div class="v">${escapeHtml(message.folder_path || '')}</div>
+    </div>
+    <div class="body">${escapeHtml(message.body || '(empty body)')}</div>
+    ${atts}
+  `;
+}
+
+function resetAll() {
+  q.value = '';
+  senderFilter.value = '';
+  folderFilter.value = '';
+  dateFrom.value = '';
+  dateTo.value = '';
+  hasAtts.checked = false;
+  activeFolderPath = null;
+  treeEl.querySelectorAll('.node.active').forEach(n => n.classList.remove('active'));
+  const allNode = treeEl.querySelector('.node.all');
+  if (allNode) allNode.classList.add('active');
+  offset = 0;
+  search();
+}
+resetBtn.addEventListener('click', resetAll);
+
+const debouncedSearch = debounce(() => { offset = 0; search(); }, 200);
+[q, senderFilter, folderFilter, dateFrom, dateTo].forEach(el => el.addEventListener('input', debouncedSearch));
+hasAtts.addEventListener('change', debouncedSearch);
+
+// Keyboard: Esc clears the search input
+q.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { q.value = ''; offset = 0; search(); }
+});
+
+loadIndexMeta();
+loadFolders();
+search();   // initial browse-all view
+</script>
+</body>
+</html>

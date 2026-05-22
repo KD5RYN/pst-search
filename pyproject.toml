@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pst-search"
+version = "0.1.0"
+description = "Local search engine for Outlook PST files. Index once, search instantly, retrieve attachments on demand."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "pst-search contributors" }]
+keywords = ["pst", "outlook", "email", "search", "forensics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Communications :: Email",
+    "Topic :: Communications :: Email :: Filters",
+]
+
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "jinja2>=3.1",
+    "click>=8.1",
+]
+# Note: PST parsing is delegated to a bundled Node.js process running
+# pst-extractor (see pst_search/node/). This avoids libpff's well-known
+# "invalid table - missing data identifier" limitation on certain PSTs.
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pyinstaller>=6.3",
+]
+
+[project.scripts]
+pstsearch = "pst_search.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["pst_search*"]
+
+[tool.setuptools.package-data]
+pst_search = ["web/*"]
