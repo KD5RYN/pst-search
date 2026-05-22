@@ -4,9 +4,21 @@ A local search engine for Outlook PST files. Index once, then search by subject,
 
 ![PST Search UI — folder tree, search results, message detail](docs/screenshot.png)
 
-## Why this exists
+## What it's for
 
-`libpff` (the standard PST reader used by most Python tools) has a long-standing unfixed bug — `libpff_table_read: invalid table - missing data identifier` — that makes it unable to read certain real-world PSTs, especially those produced by recent Outlook versions. We hit that on a real 8GB mailbox: libpff couldn't read a single message. `pst-search` uses an independent codebase (`pst-extractor`, a Node.js port of `java-libpst`) and reads PSTs that libpff cannot.
+`pst-search` is for anyone who has one or more Outlook `.pst` files and needs to actually search through them — without installing Outlook, without uploading the archive to a cloud service, and without writing throwaway scripts.
+
+Common situations it solves:
+
+- **Old mailbox archives.** Email from a previous job, a retired account, or a long-running personal mailbox you've exported. The PST is sitting on a drive somewhere and you want to find things in it.
+- **Recovery and lookup.** Someone hands you a `.pst` and asks "is there an email about X?" or "find everything from Bob in 2024." You point the tool at it, the tool tells you.
+- **Forwarding specific messages.** Pull a single old email out as a standard `.eml` file (with all its attachments) and drop it into any mail client to forward, archive, or attach to a ticket.
+- **Forensic, discovery, or compliance work.** Structured search across folders, senders, recipients, attachments, and date ranges. Multi-PST library so you can index a stack of archives and search them together.
+- **Privacy-conscious search.** Everything runs on `127.0.0.1`. No data leaves the machine, no account required, the PST file is never uploaded anywhere.
+
+### Why a new tool?
+
+Most Python tooling for PSTs sits on top of `libpff`, which has a long-standing unfixed parsing bug (`libpff_table_read: invalid table - missing data identifier`) that makes it unable to read certain real-world PSTs — particularly those exported by recent versions of Outlook. We hit that on a real 8 GB mailbox where libpff couldn't read a single message. `pst-search` routes through an independent codebase (`pst-extractor`, a Node.js port of `java-libpst`), so PSTs that defeat libpff still open here.
 
 ## Features
 
