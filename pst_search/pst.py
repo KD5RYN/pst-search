@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
@@ -25,19 +24,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 
-from bs4 import BeautifulSoup
 
-
-# Folder housing extract.mjs / attachment.mjs / node_modules. In a PyInstaller
-# bundle this is unpacked next to the .exe; in dev mode it's relative to this
-# source file.
 def _node_scripts_dir() -> Path:
-    # PyInstaller sets _MEIPASS to the temp extract dir at runtime
-    base = getattr(sys, "_MEIPASS", None)
-    if base:
-        candidate = Path(base) / "pst_search" / "node"
-        if candidate.exists():
-            return candidate
+    """Folder housing extract.mjs / attachment.mjs / node_modules."""
     return Path(__file__).parent / "node"
 
 
@@ -45,21 +34,12 @@ def _resolve_node() -> str:
     """Return the absolute path to the Node.js interpreter.
 
     Search order:
-      1. PSTSEARCH_NODE env var (full override)
-      2. Bundled Node alongside a PyInstaller / py2app / AppImage bundle
-      3. `node` on PATH
-
-    Cross-platform: tries both `node.exe` (Windows) and `node` (macOS / Linux).
+      1. PSTSEARCH_NODE env var (full override — useful for non-standard installs)
+      2. `node` on PATH (cross-platform — handles both `node.exe` and `node`)
     """
     env_node = os.environ.get("PSTSEARCH_NODE")
     if env_node and Path(env_node).exists():
         return env_node
-
-    base = getattr(sys, "_MEIPASS", None) or Path(sys.executable).parent
-    for name in ("node.exe", "node"):
-        candidate = Path(base) / "node" / name
-        if candidate.exists():
-            return str(candidate)
 
     found = shutil.which("node")
     if found:
@@ -93,29 +73,6 @@ class Message:
     headers: str | None
     folder_path: str
     attachments: list[Attachment] = field(default_factory=list)
-
-
-_WHITESPACE_RE = re.compile(r"\s+")
-
-
-def _strip_html(body: str) -> str:
-    """Strip HTML tags + collapse whitespace. PST messages from modern Outlook
-    often include 20-100KB of HTML+CSS marketing markup; storing the raw HTML
-    inflates the FTS5 index hugely and makes search snippets unreadable."""
-    if not body:
-        return ""
-    looks_like_html = body.lstrip()[:20].lower().startswith(("<!doctype", "<html", "<body", "<head", "<table", "<div"))
-    if not looks_like_html and "<" not in body:
-        return body
-    try:
-        soup = BeautifulSoup(body, "html.parser")
-        for tag in soup(["script", "style", "head"]):
-            tag.decompose()
-        text = soup.get_text(separator=" ")
-        return _WHITESPACE_RE.sub(" ", text).strip()
-    except Exception:
-        # Fallback: brute regex strip if BeautifulSoup chokes
-        return _WHITESPACE_RE.sub(" ", re.sub(r"<[^>]+>", " ", body)).strip()
 
 
 def _format_recipients(rs: list[dict]) -> str:

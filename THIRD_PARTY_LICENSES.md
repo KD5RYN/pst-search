@@ -12,9 +12,7 @@ licenses compatible with redistribution.
 | [Uvicorn](https://github.com/encode/uvicorn) | BSD-3-Clause | <https://github.com/encode/uvicorn/blob/master/LICENSE.md> |
 | [Starlette](https://github.com/encode/starlette) (via FastAPI) | BSD-3-Clause | <https://github.com/encode/starlette/blob/master/LICENSE.md> |
 | [Pydantic](https://github.com/pydantic/pydantic) (via FastAPI) | MIT | <https://github.com/pydantic/pydantic/blob/main/LICENSE> |
-| [Jinja2](https://github.com/pallets/jinja) | BSD-3-Clause | <https://github.com/pallets/jinja/blob/main/LICENSE.txt> |
 | [Click](https://github.com/pallets/click) | BSD-3-Clause | <https://github.com/pallets/click/blob/main/LICENSE.txt> |
-| [Beautiful Soup 4](https://www.crummy.com/software/BeautifulSoup/) | MIT | <https://git.launchpad.net/beautifulsoup/tree/LICENSE> |
 | [anyio](https://github.com/agronholm/anyio) (via Starlette) | MIT | <https://github.com/agronholm/anyio/blob/master/LICENSE> |
 | [h11](https://github.com/python-hyper/h11) (via Uvicorn) | MIT | <https://github.com/python-hyper/h11/blob/master/LICENSE.txt> |
 
@@ -31,13 +29,6 @@ licenses compatible with redistribution.
 [java-libpst](https://github.com/rjohnsondev/java-libpst) (MIT), which
 independently implements Microsoft's PST format from the publicly-documented
 [MS-PST specification](https://learn.microsoft.com/en-us/openspecs/office_file_formats/ms-pst/).
-
-## Build dependencies (not redistributed in runtime)
-
-| Package | License | Notes |
-| --- | --- | --- |
-| [PyInstaller](https://github.com/pyinstaller/pyinstaller) | GPL-2.0-or-later, **with bootloader exception** | The exception explicitly allows applications built with PyInstaller to ship under any license. Source: <https://github.com/pyinstaller/pyinstaller/blob/develop/COPYING.txt>. |
-| [Node.js](https://nodejs.org/) (bundled into Windows .exe distribution) | MIT-style mixed (MIT + BSD + ICU + various) | License text is included with the bundled Node runtime in the `.exe` distribution directory. |
 
 ## Format specification
 

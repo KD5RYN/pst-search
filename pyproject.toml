@@ -28,17 +28,15 @@ classifiers = [
 dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
-    "jinja2>=3.1",
     "click>=8.1",
 ]
-# Note: PST parsing is delegated to a bundled Node.js process running
-# pst-extractor (see pst_search/node/). This avoids libpff's well-known
+# PST parsing is delegated to a Node.js subprocess running pst-extractor
+# (see pst_search/node/). This avoids libpff's well-known
 # "invalid table - missing data identifier" limitation on certain PSTs.
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
-    "pyinstaller>=6.3",
 ]
 
 [project.scripts]
@@ -48,4 +46,4 @@ pstsearch = "pst_search.cli:main"
 include = ["pst_search*"]
 
 [tool.setuptools.package-data]
-pst_search = ["web/*"]
+pst_search = ["web/*", "node/*.mjs", "node/package.json", "node/package-lock.json"]

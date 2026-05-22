@@ -1,8 +1,8 @@
 """FastAPI search server.
 
-The DB path is provided via environment variable `PSTSEARCH_DB` so PyInstaller
-bundling and the CLI can share one entry point. Static frontend is served
-from pst_search/web.
+The DB path is provided via environment variable `PSTSEARCH_DB` so the CLI
+and any future bundled entry point can share one configuration source.
+Static frontend is served from `pst_search/web`.
 """
 from __future__ import annotations
 
