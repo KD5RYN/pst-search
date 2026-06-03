@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pst-search"
-version = "0.1.2"
+version = "0.1.3"
 description = "Local search engine for Outlook PST files. Index once, search instantly, retrieve attachments on demand."
 readme = "README.md"
 requires-python = ">=3.10"

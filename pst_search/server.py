@@ -326,10 +326,35 @@ def _gnome_text_scaling() -> float | None:
         return None
 
 
+def _width_based_scaling(screen_width: int) -> float:
+    """Pick a Tk scaling multiplier from total screen width when no other
+    signal is available. Pop!_OS / Ubuntu / Wayland compositors do display
+    scaling at a layer Tk can't see, so a HiDPI laptop reports 96 DPI to X
+    with a very wide pixel dimension. Width is the cheap-but-good proxy.
+
+    < 2560:  no bump
+    2560-3839:  1.5x  (1440p, 2.5K)
+    3840-5119:  2.0x  (4K single, common HiDPI laptop)
+    >= 5120:    2.5x  (5K+, or 4K + external)
+    """
+    if screen_width >= 5120:
+        return 2.5
+    if screen_width >= 3840:
+        return 2.0
+    if screen_width >= 2560:
+        return 1.5
+    return 1.0
+
+
 def _apply_tk_scaling(root) -> None:
-    """Bump Tk's scaling factor on HiDPI Linux. Honors PSTSEARCH_TK_SCALING
-    as an absolute override; otherwise multiplies Tk's auto-detected scaling
-    by the GNOME text-scaling-factor when running on GNOME/Pop!_OS/Ubuntu."""
+    """Bump Tk's scaling factor on HiDPI Linux. Order of precedence:
+
+      1. PSTSEARCH_TK_SCALING env var — absolute override, always wins.
+      2. GNOME text-scaling-factor (gsettings) — multiplied into Tk's current.
+      3. Screen-width heuristic — kicks in when (1) and (2) are absent and
+         the X server is reporting a wide pixel dimension that Tk hasn't
+         translated into a sensible scaling factor (compositor-level scaling).
+    """
     override = os.environ.get("PSTSEARCH_TK_SCALING")
     if override:
         try:
@@ -339,12 +364,26 @@ def _apply_tk_scaling(root) -> None:
         return
     if not sys.platform.startswith("linux"):
         return
-    factor = _gnome_text_scaling()
-    if not factor or factor <= 1.05:
+
+    gnome_factor = _gnome_text_scaling()
+    if gnome_factor and gnome_factor > 1.05:
+        try:
+            current = float(root.tk.call("tk", "scaling"))
+            root.tk.call("tk", "scaling", current * gnome_factor)
+        except Exception:  # noqa: BLE001
+            pass
         return
+
     try:
         current = float(root.tk.call("tk", "scaling"))
-        root.tk.call("tk", "scaling", current * factor)
+        # Only kick in when Tk is at its default ~1.33 (96 DPI). If Tk has
+        # already detected a higher DPI, the X server is set up right and
+        # we shouldn't double-up.
+        if 1.0 <= current <= 1.5:
+            width = int(root.winfo_screenwidth())
+            mult = _width_based_scaling(width)
+            if mult > 1.0:
+                root.tk.call("tk", "scaling", current * mult)
     except Exception:  # noqa: BLE001
         pass
 
