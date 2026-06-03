@@ -323,6 +323,26 @@ def api_pick_pst() -> dict:
             # Import lazily so the server still starts on systems where tk is
             # not installed (only the picker endpoint will fail).
             from tkinter import Tk, filedialog
+        except ImportError:
+            if sys.platform.startswith("linux"):
+                hint = (
+                    "On Debian/Ubuntu/Pop!_OS, run `sudo apt install python3-tk` "
+                    "and restart the server."
+                )
+            elif sys.platform == "darwin":
+                hint = (
+                    "On macOS with Homebrew Python, run "
+                    "`brew install python-tk@3.12` (match your Python version) "
+                    "and restart the server."
+                )
+            else:
+                hint = "Install a Python build that includes the tkinter stdlib."
+            result["error"] = (
+                "Native file picker unavailable — tkinter is not installed. "
+                f"{hint} You can also paste a path into the field below."
+            )
+            return
+        try:
             root = Tk()
             root.withdraw()
             root.attributes("-topmost", True)
@@ -340,7 +360,7 @@ def api_pick_pst() -> dict:
     t.join()
 
     if result["error"]:
-        raise HTTPException(status_code=500, detail=result["error"])
+        raise HTTPException(status_code=400, detail=result["error"])
     return result
 
 

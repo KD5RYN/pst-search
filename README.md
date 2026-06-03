@@ -45,6 +45,8 @@ Most Python tooling for PSTs sits on top of `libpff`, which has a long-standing 
 | Node.js 18+ | `winget install OpenJS.NodeJS.LTS` | `brew install node` | `sudo apt install nodejs npm` |
 
 > **macOS Homebrew users**: also run `brew install python-tk@3.12` so the file picker dialog works. (The python.org installer includes it already.)
+>
+> **Pop!_OS / Ubuntu / Debian / Mint**: Python's `tkinter` ships in a separate apt package on these distros. Without it, the **Add a PST** button in the web UI fails with `ModuleNotFoundError: No module named 'tkinter'`. Install it once with `sudo apt install python3-tk`. If you don't install it, the app still works — you can paste an absolute path into the "or paste a path…" input on the welcome screen, or skip the UI entirely and index from the CLI: `pstsearch index /path/to/file.pst`.
 
 ## Quick start
 
@@ -57,6 +59,8 @@ pstsearch serve
 ```
 
 `pstsearch setup` is a thin wrapper around `npm install` for the bundled Node helper. If you skip it, the first indexing run will install the dependencies for you automatically.
+
+> **Debian/Ubuntu/Pop!_OS** users will get `error: externally-managed-environment` from the bare `pip install` above — that's [PEP 668](https://peps.python.org/pep-0668/), which blocks pip from touching the system Python. Use `pipx` instead (`sudo apt install pipx nodejs npm python3-tk && pipx ensurepath && pipx install pst-search`), then a new shell, then `pstsearch setup`.
 
 ### …or install from source
 
