@@ -10,6 +10,7 @@ import base64
 import io
 import os
 import re
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -308,6 +309,46 @@ class IndexRequest(BaseModel):
     options: IndexOptions | None = None
 
 
+def _gnome_text_scaling() -> float | None:
+    """Read GNOME's text-scaling-factor. Returns None on non-GNOME or any error.
+    Used to size the Tk file picker on Linux, where Tk otherwise ignores the
+    desktop's scaling and looks tiny on HiDPI displays."""
+    try:
+        out = subprocess.check_output(
+            ["gsettings", "get", "org.gnome.desktop.interface", "text-scaling-factor"],
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+        ).decode("utf-8", errors="replace").strip()
+        val = float(out)
+        return val if val > 0 else None
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError,
+            FileNotFoundError, ValueError, OSError):
+        return None
+
+
+def _apply_tk_scaling(root) -> None:
+    """Bump Tk's scaling factor on HiDPI Linux. Honors PSTSEARCH_TK_SCALING
+    as an absolute override; otherwise multiplies Tk's auto-detected scaling
+    by the GNOME text-scaling-factor when running on GNOME/Pop!_OS/Ubuntu."""
+    override = os.environ.get("PSTSEARCH_TK_SCALING")
+    if override:
+        try:
+            root.tk.call("tk", "scaling", float(override))
+        except (ValueError, Exception):  # noqa: BLE001
+            pass
+        return
+    if not sys.platform.startswith("linux"):
+        return
+    factor = _gnome_text_scaling()
+    if not factor or factor <= 1.05:
+        return
+    try:
+        current = float(root.tk.call("tk", "scaling"))
+        root.tk.call("tk", "scaling", current * factor)
+    except Exception:  # noqa: BLE001
+        pass
+
+
 @app.post("/api/pick-pst")
 def api_pick_pst() -> dict:
     """Open a native OS file-picker dialog (Tkinter) and return the chosen path.
@@ -344,6 +385,7 @@ def api_pick_pst() -> dict:
             return
         try:
             root = Tk()
+            _apply_tk_scaling(root)
             root.withdraw()
             root.attributes("-topmost", True)
             chosen = filedialog.askopenfilename(

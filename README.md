@@ -47,6 +47,8 @@ Most Python tooling for PSTs sits on top of `libpff`, which has a long-standing 
 > **macOS Homebrew users**: also run `brew install python-tk@3.12` so the file picker dialog works. (The python.org installer includes it already.)
 >
 > **Pop!_OS / Ubuntu / Debian / Mint**: Python's `tkinter` ships in a separate apt package on these distros. Without it, the **Add a PST** button in the web UI fails with `ModuleNotFoundError: No module named 'tkinter'`. Install it once with `sudo apt install python3-tk`. If you don't install it, the app still works — you can paste an absolute path into the "or paste a path…" input on the welcome screen, or skip the UI entirely and index from the CLI: `pstsearch index /path/to/file.pst`.
+>
+> **HiDPI Linux displays**: Tk doesn't follow desktop scaling, so the file picker can look tiny on a 4K laptop. On GNOME/Pop!_OS/Ubuntu the picker now reads your `text-scaling-factor` (Settings → Accessibility → Large Text, or `gsettings get org.gnome.desktop.interface text-scaling-factor`) and scales itself accordingly. On other desktops, or to force a specific size, set `PSTSEARCH_TK_SCALING=2.0` (or whatever absolute scaling factor you want — 1.0 is "no scaling", 2.0 is "double size") before launching `pstsearch serve`.
 
 ## Quick start
 
