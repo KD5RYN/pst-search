@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=77", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,21 +8,42 @@ version = "0.1.0"
 description = "Local search engine for Outlook PST files. Index once, search instantly, retrieve attachments on demand."
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [{ name = "pst-search contributors" }]
-keywords = ["pst", "outlook", "email", "search", "forensics"]
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "KD5RYN", email = "jlacy8234@gmail.com" }]
+keywords = [
+    "pst",
+    "outlook",
+    "email",
+    "eml",
+    "full-text-search",
+    "sqlite",
+    "fts5",
+    "ediscovery",
+    "forensics",
+    "libpff",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
+    "Environment :: Console",
     "Environment :: Web Environment",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "Intended Audience :: Legal Industry",
+    "Intended Audience :: Information Technology",
     "Operating System :: OS Independent",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Communications :: Email",
     "Topic :: Communications :: Email :: Filters",
+    "Topic :: Office/Business",
+    "Topic :: System :: Archiving",
+    "Topic :: Database",
 ]
 
 dependencies = [
@@ -37,10 +58,17 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "build>=1.0",
+    "twine>=5.0",
 ]
 
 [project.scripts]
 pstsearch = "pst_search.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/KD5RYN/pst-search"
+Repository = "https://github.com/KD5RYN/pst-search"
+Issues = "https://github.com/KD5RYN/pst-search/issues"
 
 [tool.setuptools.packages.find]
 include = ["pst_search*"]

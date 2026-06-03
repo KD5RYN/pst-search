@@ -32,11 +32,12 @@ Most Python tooling for PSTs sits on top of `libpff`, which has a long-standing 
 - **Multiple PSTs** in one index. Re-indexing a PST replaces its rows in place.
 - **Local-only**: everything runs on `127.0.0.1`. No data leaves your machine.
 
-## Quick start
+## Requirements
 
-### Prerequisites (one-time per machine)
+`pst-search` needs **two runtimes** on the machine before it can do anything useful:
 
-The app needs Python and Node.js at runtime. **Git is not required** — you can either `git clone` or just download the source as a ZIP.
+- **Python 3.10 or newer** — the indexer, search API, and CLI.
+- **Node.js 18 or newer** — the PST parser (`pst-extractor`) runs as a Node subprocess. `npm` ships with Node.
 
 | | Windows | macOS | Linux (Ubuntu/Debian) |
 | --- | --- | --- | --- |
@@ -45,28 +46,32 @@ The app needs Python and Node.js at runtime. **Git is not required** — you can
 
 > **macOS Homebrew users**: also run `brew install python-tk@3.12` so the file picker dialog works. (The python.org installer includes it already.)
 
-### Get the source
+## Quick start
 
-Either:
+### Install from PyPI
+
+```bash
+pip install pst-search
+pstsearch setup     # one-time: pulls down the Node-side pst-extractor library
+pstsearch serve
+```
+
+`pstsearch setup` is a thin wrapper around `npm install` for the bundled Node helper. If you skip it, the first indexing run will install the dependencies for you automatically.
+
+### …or install from source
 
 ```bash
 # If you have git installed:
 git clone https://github.com/KD5RYN/pst-search
 cd pst-search
-```
-
-…or **download as a ZIP** from <https://github.com/KD5RYN/pst-search> (green **Code** button → **Download ZIP**), then unzip and `cd` into the folder.
-
-### Install
-
-Two commands — same on every OS:
-
-```bash
 pip install -e .
 (cd pst_search/node && npm install)
+pstsearch serve
 ```
 
-On Windows PowerShell the second line is:
+…or **download as a ZIP** from <https://github.com/KD5RYN/pst-search> (green **Code** button → **Download ZIP**), then unzip, `cd` into the folder, and run the same two install commands.
+
+On Windows PowerShell the second install line is:
 
 ```pwsh
 cd pst_search\node; npm install; cd ..\..
@@ -166,6 +171,12 @@ pstsearch index FILE.pst
 
 pstsearch list
     Show indexed PSTs (id, message count, path, indexed-at).
+
+pstsearch setup
+    One-time install of the Node-side dependencies (pst-extractor and friends).
+    Safe to re-run. Indexing will auto-bootstrap these on first use if you
+    forget, so this command is mostly for users who want the install to
+    happen up front rather than the first time they hit "Index".
 ```
 
 ## Architecture

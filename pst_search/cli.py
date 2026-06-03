@@ -19,6 +19,7 @@ import uvicorn
 
 from . import db as dbmod
 from .indexer import index_pst
+from .pst import ensure_node_deps
 
 
 def default_db_path() -> Path:
@@ -121,6 +122,21 @@ def cmd_serve(host: str, port: int, db_path: Path | None, no_browser: bool) -> N
         import threading
         threading.Timer(1.0, lambda: webbrowser.open(url)).start()
     uvicorn.run("pst_search.server:app", host=host, port=port, log_level="warning")
+
+
+@main.command("setup")
+def cmd_setup() -> None:
+    """Install the Node.js helper's dependencies (one-time).
+
+    Runs `npm install` next to the bundled .mjs scripts (or in a per-user
+    fallback directory if site-packages is read-only). Safe to re-run.
+    """
+    try:
+        install_dir = ensure_node_deps(verbose=True)
+    except RuntimeError as e:
+        click.secho(str(e), fg="red", err=True)
+        sys.exit(1)
+    click.secho(f"Node dependencies ready at {install_dir}", fg="green")
 
 
 @main.command("list")

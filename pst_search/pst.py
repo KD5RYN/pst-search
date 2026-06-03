@@ -25,9 +25,37 @@ from pathlib import Path
 from typing import Iterator
 
 
-def _node_scripts_dir() -> Path:
-    """Folder housing extract.mjs / attachment.mjs / node_modules."""
+def _bundled_node_dir() -> Path:
+    """Where the .mjs scripts and package.json ship inside the package."""
     return Path(__file__).parent / "node"
+
+
+def _user_node_dir() -> Path:
+    """Per-user fallback location for Node assets when the bundled dir
+    isn't writable (typical of system-wide Python installs)."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("APPDATA") or Path.home() / "AppData" / "Roaming")
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    return base / "pst-search" / "node"
+
+
+def _node_install_dir() -> Path:
+    """Choose where node_modules lives. Prefer next to the bundled .mjs
+    files (Node's ESM resolver finds the sibling node_modules with no
+    env tweaks); fall back to a per-user dir when site-packages is
+    read-only."""
+    bundled = _bundled_node_dir()
+    try:
+        bundled.mkdir(parents=True, exist_ok=True)
+        probe = bundled / ".pstsearch-write-probe"
+        probe.touch()
+        probe.unlink()
+        return bundled
+    except OSError:
+        return _user_node_dir()
 
 
 def _resolve_node() -> str:
@@ -50,6 +78,68 @@ def _resolve_node() -> str:
         "(or `brew install node` / `apt install nodejs`) and re-run, or set "
         "the PSTSEARCH_NODE environment variable to the absolute path of node."
     )
+
+
+def ensure_node_deps(verbose: bool = True) -> Path:
+    """Make sure pst-extractor (and friends) are installed under a
+    node_modules sibling of the .mjs scripts. Returns the directory that
+    holds both. Idempotent — a no-op after the first successful call.
+
+    Raises RuntimeError with a user-actionable message if Node or npm is
+    missing, or if `npm install` fails.
+    """
+    install_dir = _node_install_dir()
+    marker = install_dir / "node_modules" / "pst-extractor" / "package.json"
+    if marker.exists():
+        return install_dir
+
+    install_dir.mkdir(parents=True, exist_ok=True)
+
+    bundled = _bundled_node_dir()
+    if install_dir != bundled:
+        for fname in ("package.json", "package-lock.json"):
+            src = bundled / fname
+            if src.exists():
+                shutil.copy2(src, install_dir / fname)
+        for mjs in bundled.glob("*.mjs"):
+            shutil.copy2(mjs, install_dir / mjs.name)
+
+    _resolve_node()  # fail fast with the friendly Node-missing message
+    npm = shutil.which("npm")
+    if not npm:
+        raise RuntimeError(
+            "npm was not found on PATH. npm ships with Node.js — install "
+            "Node 18+ from https://nodejs.org and re-run `pstsearch setup`."
+        )
+
+    if verbose:
+        print(f"Installing Node dependencies into {install_dir}", file=sys.stderr)
+        print("(one-time, ~10-30 seconds)", file=sys.stderr)
+    try:
+        subprocess.run(
+            [npm, "install", "--omit=dev", "--no-audit", "--no-fund"],
+            cwd=str(install_dir),
+            check=True,
+            stdout=sys.stderr if verbose else subprocess.DEVNULL,
+            stderr=sys.stderr,
+        )
+    except subprocess.CalledProcessError as e:
+        raise RuntimeError(
+            f"`npm install` failed (exit {e.returncode}) in {install_dir}. "
+            "Re-run `pstsearch setup` after fixing the issue (often a network "
+            "or proxy problem)."
+        ) from e
+    return install_dir
+
+
+def _node_scripts_dir() -> Path:
+    """Folder housing extract.mjs / attachment.mjs / node_modules.
+
+    Triggers a one-time `npm install` if node_modules isn't there yet, so
+    callers (indexer, attachment fetch, .eml export) Just Work after a
+    bare `pip install`.
+    """
+    return ensure_node_deps()
 
 
 @dataclass
