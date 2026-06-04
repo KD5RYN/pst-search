@@ -1,12 +1,14 @@
 # ---------- Personal data: NEVER commit ----------
 # PST files (real mailbox content) and the search index DB stay on the user's
-# machine. The sample test PSTs are intentionally also excluded — contributors
-# should provide their own.
+# machine. Real-mailbox PSTs are excluded by default.
 *.pst
 *.ost
 *.db
 *.db-shm
 *.db-wal
+# Exception: the committed integration-test fixture. This is a slice of the
+# public-record Enron corpus (FERC release — no PII), safe to redistribute.
+!tests/fixtures/*.pst
 
 # ---------- Python ----------
 __pycache__/

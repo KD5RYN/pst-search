@@ -112,11 +112,12 @@ The search box accepts the same operators most users already know from Gmail and
 
 > **Words match whole, not partial.** Search works on whole words, so
 > `retention` matches but `retent` finds nothing. To match the start of a
-> word, add `*`: `retent*` matches "retention", "retentive", etc. There is
-> no "contains" wildcard — a leading `*` (e.g. `*tention`) does nothing, and
-> `*retent*` works only because the trailing `*` does — it's the same as
-> `retent*`. This applies to the operators below too: `from:bob` matches the
-> word "bob", not "bobby" — use `from:bob*` for that.
+> word, add a trailing `*`: `retent*` matches "retention", "retentive", etc.
+> There is **no substring or suffix match** — `*tion` just looks for the word
+> "tion". A *leading* `*` is ignored, so `*retent*` is treated as `retent*`
+> (it does **not** match in the middle of a word). This applies to the
+> operators below too: `from:bob` matches the word "bob", not "bobby" — use
+> `from:bob*` for that.
 
 **Operators:**
 

@@ -362,7 +362,7 @@
         <tr><td>meet*</td><td>partial word — add * to match the start of a word (meeting, meetup…)</td></tr>
         <tr><td>(a OR b) AND c</td><td>group with parentheses</td></tr>
       </table>
-      <p style="margin: 8px 0 0; color: var(--fg-dim); font-size: 11px;">Whole words only — <code>retent</code> won't find "retention"; use <code>retent*</code>.</p>
+      <p style="margin: 8px 0 0; color: var(--fg-dim); font-size: 11px;">Whole words only — <code>retent</code> won't find "retention"; use <code>retent*</code>. A leading <code>*</code> is ignored (no substring match), so <code>*retent*</code> is the same as <code>retent*</code>.</p>
       <hr>
       <h3>Example</h3>
       <table>
@@ -1112,7 +1112,13 @@ async function search() {
   }
   const j = await resp.json();
   if (!resp.ok) {
+    // Clear the previous results so a failed query can't masquerade as a
+    // successful one by leaving stale results on screen.
     errorBar.innerHTML = `<div class="error">${escapeHtml(j.detail || 'search error')}</div>`;
+    resultsEl.innerHTML = '<div class="empty-state">No results — fix the query above.</div>';
+    searchMeta.textContent = '';
+    total = 0;
+    updatePagination();
     return;
   }
   total = j.total;

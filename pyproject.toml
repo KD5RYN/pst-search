@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pst-search"
-version = "1.1.0"
+version = "1.1.1"
 description = "Local search engine for Outlook PST files. Index once, search instantly, retrieve attachments on demand."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -69,6 +69,13 @@ pstsearch = "pst_search.cli:main"
 Homepage = "https://github.com/KD5RYN/pst-search"
 Repository = "https://github.com/KD5RYN/pst-search"
 Issues = "https://github.com/KD5RYN/pst-search/issues"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "integration: end-to-end tests that require Node.js and the PST fixture",
+]
 
 [tool.setuptools.packages.find]
 include = ["pst_search*"]
