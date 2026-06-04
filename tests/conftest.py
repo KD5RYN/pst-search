@@ -74,14 +74,13 @@ def insert_all(conn, pst_id, messages):
     return ids
 
 
-@pytest.fixture
-def seeded_db(conn, pst_id):
-    """A DB pre-loaded with a small, known corpus used across search tests.
+def sample_corpus() -> list[Message]:
+    """The small, known message set used across search/API tests.
 
     Subjects/bodies are chosen to exercise the documented matching rules,
     e.g. the "Email Retention Policy" subject for the whole-word/prefix tests.
     """
-    messages = [
+    return [
         build_message(
             "1",
             subject="Email Retention Policy",
@@ -114,5 +113,41 @@ def seeded_db(conn, pst_id):
             folder_path="Top/Inbox",
         ),
     ]
-    insert_all(conn, pst_id, messages)
+
+
+def seed(conn, pst_id) -> None:
+    """Load the sample corpus into a connection and finalize counts.
+
+    finalize_pst mirrors what the real indexer does at the end of a run — it
+    sets pst_files.message_count — so the seeded DB matches a real one.
+    """
+    insert_all(conn, pst_id, sample_corpus())
+    dbmod.finalize_pst(conn, pst_id)
+
+
+@pytest.fixture
+def seeded_db(conn, pst_id):
+    """A DB pre-loaded with the sample corpus, used across search tests."""
+    seed(conn, pst_id)
     return conn
+
+
+@pytest.fixture
+def api_client(tmp_path, monkeypatch):
+    """A FastAPI TestClient wired to a temp DB seeded with the sample corpus.
+
+    TestClient is imported lazily so unit-only runs don't require httpx.
+    """
+    from starlette.testclient import TestClient
+
+    from pst_search import server
+
+    db_file = tmp_path / "api.db"
+    c = dbmod.connect(db_file)
+    pid = dbmod.register_pst(c, "/fake/mailbox.pst")
+    seed(c, pid)
+    c.close()
+
+    monkeypatch.setenv("PSTSEARCH_DB", str(db_file))
+    with TestClient(server.app) as client:
+        yield client
