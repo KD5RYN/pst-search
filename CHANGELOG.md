@@ -5,6 +5,32 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.1] - 2026-06-04
+
+### Added
+- **Automated test suite** (`tests/`) with pytest: unit tests for the query
+  translation, the FTS5 whole-word/prefix matching rules, structured filters,
+  the indexer, and the job registry; plus an end-to-end integration test that
+  indexes a committed slice of the public-record Enron corpus
+  (`tests/fixtures/enron.pst`) through the real Node extractor.
+- **CI** (`.github/workflows/test.yml`): runs the suite on every push and PR
+  across Python 3.10–3.13.
+
+### Fixed
+- **Leading `*` in a search no longer errors.** Queries like `*retent*` or
+  `*foo` (typed out of glob/LIKE habit) used to hit FTS5's special-query
+  parser and fail with `unknown special query`. A leading `*` is now stripped,
+  so `*retent*` is treated as the valid prefix query `retent*`, and a bare `*`
+  falls back to browse. (There is still no substring/suffix matching — FTS5
+  can't do it.)
+- **Failed searches no longer show stale results.** On a search error the
+  result list now clears and shows the error, instead of leaving the previous
+  results on screen (which made a broken query look like it had succeeded).
+
+### Docs
+- Corrected the README and in-app cheatsheet: a leading `*` is ignored (not a
+  substring match), and a trailing `*` is the only wildcard form.
+
 ## [1.1.0] - 2026-06-04
 
 ### Added

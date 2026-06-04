@@ -1,6 +1,12 @@
 # Testing build-out plan
 
-Status: **proposed** (no automated tests exist yet as of v1.1.0).
+Status: **implemented in v1.1.1** — Tier 1 (unit), Tier 3 (integration against a
+committed Enron fixture), and Tier 4 (CI) are built. Tier 2 (HTTP API tests via
+`httpx`/`TestClient`) is still outstanding. The decision on the integration
+fixture was settled: we commit `tests/fixtures/enron.pst` (a slice of the
+public-record Enron corpus — FERC release, no PII), rather than a synthetic tiny
+PST, because the single-message `sample.pst` can't exercise folders or
+multi-message search.
 
 This plan adds a real test suite to `pst-search`. Today there are zero tests,
 no CI test job, and the sample PSTs (`sample.pst`, `enron.pst`, `email-out.pst`)

@@ -175,6 +175,18 @@ _OPERATOR_RE = re.compile(
     flags=re.IGNORECASE,
 )
 
+# A term that *starts* with '*' makes FTS5 parse it as a special-query command
+# (e.g. "*reset*") and raise "unknown special query" — so `*foo*` / `*foo`,
+# which users type out of glob/LIKE habit, blow up instead of searching. FTS5
+# only supports a *trailing* '*' (prefix match), so we drop any leading '*' from
+# each term: `*foo*` -> `foo*` (prefix), `*foo` -> `foo` (whole word). There is
+# still no suffix/substring matching — `*tion` just looks for the word "tion".
+_LEADING_STAR_RE = re.compile(r"(^|\s)\*+")
+
+
+def _strip_leading_stars(query: str) -> str:
+    return _LEADING_STAR_RE.sub(r"\1", query)
+
 
 def translate_query(query: str) -> str:
     """Translate human-friendly operators into FTS5 column-restricted syntax.
@@ -188,8 +200,11 @@ def translate_query(query: str) -> str:
 
     Anything that doesn't match an alias passes through untouched — so
     native FTS5 syntax (AND/OR/NOT, quoted phrases, prefix*, parens) still
-    works exactly as it did before.
+    works exactly as it did before. Leading '*' on a term is dropped first
+    (see _LEADING_STAR_RE) so `*foo*` becomes the valid prefix query `foo*`.
     """
+    query = _strip_leading_stars(query)
+
     def repl(m: re.Match) -> str:
         op = m.group(1).lower()
         val = m.group(2)
@@ -246,7 +261,9 @@ def search(
     if sort not in _SORT_CHOICES:
         sort = "newest"
     query = (query or "").strip()
-    if query:
+    # A query that is only wildcards (e.g. "*") has no searchable content once
+    # the leading stars are stripped — treat it as browse rather than an error.
+    if _strip_leading_stars(query).strip():
         return _search_fts(conn, query, sender=sender, recipient=recipient, folder=folder,
                            has_attachments=has_attachments,
                            date_from=date_from, date_to=date_to,
