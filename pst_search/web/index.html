@@ -216,6 +216,10 @@
     display: none; align-items: center; justify-content: center; z-index: 100;
   }
   .modal-overlay.open { display: flex; }
+  /* The Add-PST options dialog opens on top of the Manage PSTs modal; all
+     overlays share a z-index, so without this it would lose the paint-order
+     tiebreak (it appears earlier in the DOM) and render *behind* Manage PSTs. */
+  #addModal { z-index: 110; }
   .modal {
     background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px;
     width: 90%; max-width: 720px; max-height: 80vh; overflow: hidden;
@@ -479,6 +483,16 @@
       <div style="margin-top: 8px;">
         <button class="secondary-btn" id="setOpenFolder">Open data folder</button>
       </div>
+
+      <h3 style="font-size:11px; color:var(--fg-dim); text-transform:uppercase; letter-spacing:0.5px; margin: 18px 0 8px;">About</h3>
+      <div class="info-row">
+        <div class="k">Version</div><div class="v" id="setVersion">—</div>
+        <div class="k">License</div><div class="v"><a id="setLicense" href="https://github.com/KD5RYN/pst-search/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" style="color:var(--accent); text-decoration:none;">MIT</a></div>
+        <div class="k">Project</div><div class="v"><a id="setRepo" href="https://github.com/KD5RYN/pst-search" target="_blank" rel="noopener noreferrer" style="color:var(--accent); text-decoration:none;">github.com/KD5RYN/pst-search</a></div>
+      </div>
+      <div class="hint" style="margin-top: 4px; color: var(--fg-dim); font-size: 12px;">
+        PST parsing uses <code style="background: var(--bg-3); padding: 2px 6px; border-radius: 3px; font-size: 11px;">pst-extractor</code> and other third-party libraries — see <a href="https://github.com/KD5RYN/pst-search/blob/main/THIRD_PARTY_LICENSES.md" target="_blank" rel="noopener noreferrer" style="color:var(--accent); text-decoration:none;">third-party licenses</a>.
+      </div>
     </div>
     <div class="modal-foot">
       <button class="header-btn" id="settingsCloseBtn">Close</button>
@@ -597,6 +611,9 @@ const settingsCloseBtn = document.getElementById('settingsCloseBtn');
 const setAddr = document.getElementById('setAddr');
 const setAccess = document.getElementById('setAccess');
 const setDb = document.getElementById('setDb');
+const setVersion = document.getElementById('setVersion');
+const setRepo = document.getElementById('setRepo');
+const setLicense = document.getElementById('setLicense');
 const setOpenFolder = document.getElementById('setOpenFolder');
 const privacyChip = document.getElementById('privacyChip');
 
@@ -891,11 +908,16 @@ async function openSettings() {
   setAddr.textContent = 'loading…';
   setAccess.textContent = '…';
   setDb.textContent = '…';
+  setVersion.textContent = '…';
   settingsModal.classList.add('open');
   try {
     const r = await fetch('/api/settings');
     const s = await r.json();
     setAddr.textContent = `http://${s.host}:${s.port}`;
+    if (s.version) setVersion.textContent = `v${s.version}`;
+    if (s.repo_url) setRepo.href = s.repo_url;
+    if (s.license_url) setLicense.href = s.license_url;
+    if (s.license) setLicense.textContent = s.license;
     setAccess.innerHTML = s.is_local_only
       ? '<span style="color:#7ce38b">🔒 Local only — not reachable from other machines</span>'
       : `<span style="color:#ffd33d">⚠ Bound to ${escapeHtml(s.host)} — reachable from your network</span>`;

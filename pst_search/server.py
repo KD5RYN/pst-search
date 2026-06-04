@@ -24,9 +24,12 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import __version__
 from . import db as dbmod
 from . import pst as pstmod
 from .jobs import registry as job_registry
+
+REPO_URL = "https://github.com/KD5RYN/pst-search"
 
 
 def _db_path() -> Path:
@@ -38,7 +41,7 @@ def _db_path() -> Path:
 
 WEB_DIR = Path(__file__).parent / "web"
 
-app = FastAPI(title="PST Search", version="0.1.0")
+app = FastAPI(title="PST Search", version=__version__)
 
 
 @app.get("/")
@@ -486,6 +489,10 @@ def api_settings() -> dict:
         "is_local_only": host in ("127.0.0.1", "localhost", "::1"),
         "db_path": str(db_path),
         "db_dir": str(db_path.parent),
+        "version": __version__,
+        "repo_url": REPO_URL,
+        "license": "MIT",
+        "license_url": f"{REPO_URL}/blob/main/LICENSE",
     }
 
 
