@@ -342,11 +342,11 @@
     <div id="cheatsheet" class="cheatsheet">
       <h3>Search operators</h3>
       <table>
-        <tr><td>from:bob</td><td>messages from anyone matching "bob"</td></tr>
-        <tr><td>to:alice</td><td>sent to anyone matching "alice" (To/Cc/Bcc)</td></tr>
+        <tr><td>from:bob</td><td>sender name or email has the word "bob"</td></tr>
+        <tr><td>to:alice</td><td>recipient has the word "alice" (To/Cc/Bcc)</td></tr>
         <tr><td>subject:budget</td><td>match only in the subject</td></tr>
         <tr><td>body:meeting</td><td>match only in the body</td></tr>
-        <tr><td>folder:inbox</td><td>messages whose folder path contains "inbox"</td></tr>
+        <tr><td>folder:inbox</td><td>folder path has the word "inbox"</td></tr>
       </table>
       <hr>
       <h3>Combine them</h3>
@@ -355,9 +355,10 @@
         <tr><td>a OR b</td><td>either word</td></tr>
         <tr><td>a NOT b</td><td>has a, not b</td></tr>
         <tr><td>"q4 plan"</td><td>exact phrase</td></tr>
-        <tr><td>meet*</td><td>prefix match (meeting, meetup…)</td></tr>
+        <tr><td>meet*</td><td>partial word — add * to match the start of a word (meeting, meetup…)</td></tr>
         <tr><td>(a OR b) AND c</td><td>group with parentheses</td></tr>
       </table>
+      <p style="margin: 8px 0 0; color: var(--fg-dim); font-size: 11px;">Whole words only — <code>retent</code> won't find "retention"; use <code>retent*</code>.</p>
       <hr>
       <h3>Example</h3>
       <table>

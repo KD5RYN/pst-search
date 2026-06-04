@@ -110,15 +110,23 @@ Delete that file to wipe the index and start over.
 
 The search box accepts the same operators most users already know from Gmail and Outlook, plus all of SQLite FTS5's native query language.
 
+> **Words match whole, not partial.** Search works on whole words, so
+> `retention` matches but `retent` finds nothing. To match the start of a
+> word, add `*`: `retent*` matches "retention", "retentive", etc. There is
+> no "contains" wildcard — a leading `*` (e.g. `*tention`) does nothing, and
+> `*retent*` works only because the trailing `*` does — it's the same as
+> `retent*`. This applies to the operators below too: `from:bob` matches the
+> word "bob", not "bobby" — use `from:bob*` for that.
+
 **Operators:**
 
 | Type | Means |
 | --- | --- |
-| `from:bob` | sender name or email contains "bob" |
-| `to:alice` | any recipient (To/Cc/Bcc) contains "alice" |
+| `from:bob` | sender name or email has the word "bob" |
+| `to:alice` | any recipient (To/Cc/Bcc) has the word "alice" |
 | `subject:budget` | match restricted to the subject |
 | `body:meeting` | match restricted to the body |
-| `folder:inbox` | folder path contains "inbox" |
+| `folder:inbox` | folder path has the word "inbox" |
 | `cc:` / `bcc:` | recipients (we don't distinguish To/Cc/Bcc) |
 
 **Combining:**
@@ -130,7 +138,7 @@ The search box accepts the same operators most users already know from Gmail and
 | `a OR b` | either |
 | `a NOT b` | a but not b |
 | `"q4 plan"` | exact phrase |
-| `meet*` | prefix — matches meeting, meetup, meets, … |
+| `meet*` | prefix — matches the start of a word: meeting, meetup, meets, … (needed for partial words) |
 | `(a OR b) AND c` | group with parens |
 
 **Example:** `from:bob AND subject:budget NOT folder:trash` — emails from Bob about budgets that aren't in any trash folder.
