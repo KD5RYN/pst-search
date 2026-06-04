@@ -58,6 +58,7 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "pytest-cov>=5",
     "build>=1.0",
     "twine>=5.0",
 ]
@@ -72,10 +73,18 @@ Issues = "https://github.com/KD5RYN/pst-search/issues"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
 markers = [
     "integration: end-to-end tests that require Node.js and the PST fixture",
 ]
+
+[tool.coverage.run]
+source = ["pst_search"]
+relative_files = true
+
+[tool.coverage.report]
+# The Node-subprocess wrapper isn't exercised by unit tests (it's covered by the
+# integration test only when Node is present), so don't fail on its branches.
+show_missing = true
 
 [tool.setuptools.packages.find]
 include = ["pst_search*"]
